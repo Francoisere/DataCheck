@@ -31,7 +31,9 @@ jobs:
 
       - name: Run Test Suite (pytest)
         env:
+          PYTHONPATH: "."
           DATABASE_URL: "sqlite+aiosqlite:///./test_ci.db"
           SCAN_TIMEOUT_SECONDS: "25.0"
         run: |
-          pytest -v --tb=short
+          python -m pytest -v --tb=short
+
