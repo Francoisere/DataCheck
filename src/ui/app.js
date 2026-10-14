@@ -1,252 +1,310 @@
 document.addEventListener("DOMContentLoaded", () => {
-    const scanForm = document.getElementById("scan-form");
-    const targetUrlInput = document.getElementById("target-url-input");
-    const btnScan = document.getElementById("btn-scan");
-    const loadingState = document.getElementById("loading-state");
-    const resultsDashboard = document.getElementById("results-dashboard");
-    const loadingStep = document.getElementById("loading-step");
-    const progressBarFill = document.getElementById("progress-bar-fill");
-    const exampleChips = document.querySelectorAll(".btn-chip");
-    const bookmarkletLink = document.getElementById("bookmarklet-link");
+    const $ = (id) => document.getElementById(id);
 
-    // Configurar Bookmarklet ejecutable para navegador
-    setupBookmarklet();
+    const form = $("scan-form");
+    const urlInput = $("url-input");
+    const btnScan = $("btn-scan");
+    const btnIcon = $("btn-icon");
+    const btnLabel = $("btn-label");
+    const loading = $("loading");
+    const loadingStep = $("loading-step");
+    const progressFill = $("progress-fill");
+    const errorBox = $("error");
+    const errorMessage = $("error-message");
+    const results = $("results");
+    const examples = document.querySelectorAll(".link-btn");
 
-    // Event Listeners para Chips de ejemplo
-    exampleChips.forEach(chip => {
-        chip.addEventListener("click", () => {
-            const sampleUrl = chip.dataset.url;
-            targetUrlInput.value = sampleUrl;
-            startScan(sampleUrl);
-        });
-    });
+    const STEPS = [
+        "Abriendo el sitio en un navegador sin interfaz...",
+        "Registrando las peticiones que hace la página...",
+        "Revisando cookies y almacenamiento local antes del consentimiento...",
+        "Buscando la política de privacidad en el pie de página...",
+        "Buscando canales para ejercer derechos ARCO...",
+        "Preparando el informe...",
+    ];
 
-    // Form Submit Handler
-    scanForm.addEventListener("submit", (e) => {
-        e.preventDefault();
-        const url = targetUrlInput.value.trim();
-        if (url) {
-            startScan(url);
-        }
-    });
+    const PILARES = [
+        { key: "politica_privacidad", name: "Política de privacidad", icon: "i-file" },
+        { key: "canales_arco", name: "Derechos ARCO", icon: "i-mail" },
+        { key: "consentimiento_cookies", name: "Consentimiento y cookies", icon: "i-cookie" },
+    ];
 
-    async function startScan(rawUrl) {
-        let url = rawUrl.trim();
-        if (!url) return;
+    const TONE_ICON = { ok: "i-check", warn: "i-alert", fail: "i-x", info: "i-info" };
+    const FINDING_TONE = { OK: "ok", WARNING: "warn", FAIL: "fail" };
 
-        if (!url.startsWith("http://") && !url.startsWith("https://")) {
-            url = "https://" + url;
-            targetUrlInput.value = url;
-        }
+    let progressTimer = null;
+    let scanning = false;
 
-        showLoadingState();
-        const stopProgress = simulateProgressSteps();
+    /* ---------- Utilidades ---------- */
 
-        try {
-            console.log("Iniciando escaneo para:", url);
-            const response = await fetch("/api/v1/scan", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ url })
-            });
-
-            stopProgress();
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({ detail: response.statusText }));
-                throw new Error(errData.detail || "Error en la respuesta del servidor");
-            }
-
-            const data = await response.json();
-            console.log("Resultado del escaneo:", data);
-            renderResults(data);
-        } catch (error) {
-            stopProgress();
-            hideLoadingState();
-            alert(`Error al auditar el sitio web: ${error.message}`);
-        }
-    }
-
-    function showLoadingState() {
-        loadingState.classList.remove("hidden");
-        resultsDashboard.classList.add("hidden");
-        btnScan.disabled = true;
-        progressBarFill.style.width = "10%";
-    }
-
-    function hideLoadingState() {
-        loadingState.classList.add("hidden");
-        btnScan.disabled = false;
-    }
-
-    function simulateProgressSteps() {
-        const steps = [
-            "Iniciando navegador Headless Chromium en Playwright...",
-            "Navegando al sitio e interceptando peticiones salientes...",
-            "Auditando cookies depositadas pre-consentimiento y localStorage...",
-            "Inspeccionando enlaces en footer para Política de Privacidad...",
-            "Evaluando palabras clave normativas y canales ARCO (Ley 19.628)...",
-            "Generando dictamen técnico..."
-        ];
-
-        let currentStep = 0;
-        const interval = setInterval(() => {
-            currentStep++;
-            if (currentStep < steps.length) {
-                loadingStep.textContent = steps[currentStep];
-                progressBarFill.style.width = `${Math.min(95, (currentStep + 1) * 15)}%`;
-            }
-        }, 1800);
-
-        return () => clearInterval(interval);
-    }
-
-    function renderResults(data) {
-        hideLoadingState();
-        progressBarFill.style.width = "100%";
-        resultsDashboard.classList.remove("hidden");
-
-        // Scroll suave hacia los resultados
-        resultsDashboard.scrollIntoView({ behavior: "smooth" });
-
-        // Target URL & Summary
-        document.getElementById("target-url-display").textContent = data.target_url;
-        document.getElementById("verdict-summary").textContent = data.verdict_summary;
-        document.getElementById("score-value").textContent = data.score;
-
-        // Verdict Badge
-        const verdictBadge = document.getElementById("verdict-badge");
-        verdictBadge.textContent = data.verdict;
-        verdictBadge.className = "verdict-badge " + data.verdict.toLowerCase().replace("_", "");
-
-        // PDF Download Button
-        const btnPdf = document.getElementById("btn-download-pdf");
-        if (btnPdf) {
-            btnPdf.style.display = "inline-flex";
-            btnPdf.onclick = async () => {
-                const originalText = btnPdf.textContent;
-                btnPdf.textContent = "⏳ Generando PDF...";
-                btnPdf.disabled = true;
-
-                try {
-                    if (data.pdf_report_url) {
-                        window.open(data.pdf_report_url, "_blank");
-                    } else {
-                        // Fallback directo generando el PDF a partir del payload actual
-                        const pdfRes = await fetch("/api/v1/audits/generate-pdf", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify(data)
-                        });
-                        if (!pdfRes.ok) throw new Error("Error al generar el PDF");
-                        const blob = await pdfRes.blob();
-                        const blobUrl = window.URL.createObjectURL(blob);
-                        const a = document.createElement("a");
-                        a.href = blobUrl;
-                        a.download = `DataCheck_Auditoria_${(data.target_url || "sitio").replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
-                        window.URL.revokeObjectURL(blobUrl);
-                    }
-                } catch (err) {
-                    alert("Error al descargar el PDF: " + err.message);
-                } finally {
-                    btnPdf.textContent = originalText;
-                    btnPdf.disabled = false;
-                }
-            };
-        }
-
-
-        // Pilares
-        updatePilarCard("privacy", data.pilares.politica_privacidad);
-        updatePilarCard("arco", data.pilares.canales_arco);
-        updatePilarCard("cookies", data.pilares.consentimiento_cookies);
-
-        // Render Findings
-        const findingsList = document.getElementById("findings-list");
-        findingsList.innerHTML = "";
-
-        if (data.findings && data.findings.length > 0) {
-            data.findings.forEach(finding => {
-                const item = document.createElement("div");
-                item.className = "finding-item";
-
-                let icon = "ℹ️";
-                if (finding.status === "OK") icon = "✅";
-                if (finding.status === "WARNING") icon = "⚠️";
-                if (finding.status === "FAIL") icon = "❌";
-
-                let remediationHtml = "";
-                if (finding.remediation_ticket) {
-                    remediationHtml = `
-                        <div class="remediation-ticket-box">
-                            <div class="ticket-header">
-                                <span class="ticket-tag">🛠️ Ticket de Remediación Técnica</span>
-                                ${finding.technical_raw ? `<code class="technical-raw-badge">${escapeHtml(finding.technical_raw)}</code>` : ""}
-                            </div>
-                            <p class="ticket-text">${escapeHtml(finding.remediation_ticket)}</p>
-                        </div>
-                    `;
-                }
-
-                item.innerHTML = `
-                    <span class="finding-icon">${icon}</span>
-                    <div class="finding-content">
-                        <h4>[${escapeHtml(finding.pilar)}] ${escapeHtml(finding.title)}</h4>
-                        <p class="finding-detail">${escapeHtml(finding.detail)}</p>
-                        ${remediationHtml}
-                    </div>
-                `;
-                findingsList.appendChild(item);
-            });
-        } else {
-            findingsList.innerHTML = "<p>No se registraron hallazgos adicionales.</p>";
-        }
-    }
-
-    function escapeHtml(text) {
-        if (!text) return "";
+    function esc(text) {
         const div = document.createElement("div");
-        div.textContent = text;
+        div.textContent = text == null ? "" : String(text);
         return div.innerHTML;
     }
 
-    function updatePilarCard(pilarKey, pilarData) {
-        const badge = document.getElementById(`pilar-${pilarKey}-badge`);
-        const fill = document.getElementById(`pilar-${pilarKey}-fill`);
-        const num = document.getElementById(`pilar-${pilarKey}-num`);
+    function icon(id, size = 20) {
+        return `<svg class="icon" width="${size}" height="${size}" aria-hidden="true"><use href="#${id}"/></svg>`;
+    }
 
-        if (badge && fill && num && pilarData) {
-            badge.textContent = pilarData.status;
-            badge.className = `pilar-status-badge ${pilarData.status.toLowerCase()}`;
+    function toneOf(value) {
+        const v = String(value || "").toLowerCase();
+        if (v.includes("aprob") || v.includes("cumple") || v === "ok") return "ok";
+        if (v.includes("rech") || v.includes("falla") || v.includes("fail")) return "fail";
+        return "warn";
+    }
 
-            const percent = Math.round((pilarData.score / pilarData.max_score) * 100);
-            fill.style.width = `${percent}%`;
-            num.textContent = `${pilarData.score} / ${pilarData.max_score} pts`;
+    function pilarName(raw) {
+        const found = PILARES.find((p) => p.key === String(raw || "").toLowerCase());
+        return found ? found.name : prettify(raw);
+    }
+
+    function prettify(text) {
+        const t = String(text || "").replace(/_/g, " ").toLowerCase();
+        return t.charAt(0).toUpperCase() + t.slice(1);
+    }
+
+    /* ---------- Estados de la interfaz ---------- */
+
+    function setBusy(busy) {
+        scanning = busy;
+        btnIcon.innerHTML = `<use href="#${busy ? "i-loader" : "i-search"}"/>`;
+        btnIcon.classList.toggle("spin", busy);
+        btnLabel.textContent = busy ? "Revisando" : "Revisar sitio";
+        examples.forEach((b) => (b.disabled = busy));
+        updateButton();
+    }
+
+    function updateButton() {
+        btnScan.disabled = scanning || !urlInput.value.trim();
+    }
+
+    function startProgress() {
+        let step = 0;
+        loadingStep.textContent = STEPS[0];
+        progressFill.style.width = "12%";
+        clearInterval(progressTimer);
+        progressTimer = setInterval(() => {
+            step = Math.min(step + 1, STEPS.length - 1);
+            loadingStep.textContent = STEPS[step];
+            progressFill.style.width = `${Math.min(95, 12 + step * 16)}%`;
+        }, 1800);
+    }
+
+    function stopProgress() {
+        clearInterval(progressTimer);
+    }
+
+    /* ---------- Escaneo ---------- */
+
+    async function scan(raw) {
+        let target = (raw || "").trim();
+        if (!target || scanning) return;
+        if (!/^https?:\/\//i.test(target)) target = "https://" + target;
+        urlInput.value = target;
+
+        errorBox.hidden = true;
+        results.hidden = true;
+        loading.hidden = false;
+        setBusy(true);
+        startProgress();
+
+        try {
+            const res = await fetch("/api/v1/scan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: target }),
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ detail: res.statusText }));
+                throw new Error(
+                    typeof err.detail === "string" && err.detail
+                        ? err.detail
+                        : "El servidor respondió con un error."
+                );
+            }
+
+            const data = await res.json();
+            stopProgress();
+            loading.hidden = true;
+            setBusy(false);
+            renderResults(data);
+        } catch (e) {
+            stopProgress();
+            loading.hidden = true;
+            setBusy(false);
+            errorMessage.textContent = e.message || "No pudimos conectar con el servidor.";
+            errorBox.hidden = false;
         }
     }
 
-    function setupBookmarklet() {
-        const host = window.location.origin;
-        // Script bookmarklet que toma la URL actual del usuario y la envía a auditar
-        const bookmarkletCode = `javascript:(function(){var url=encodeURIComponent(window.location.href);window.open('${host}/?url='+url,'_blank');})();`;
-        if (bookmarkletLink) {
-            bookmarkletLink.href = bookmarkletCode;
+    /* ---------- Render del informe ---------- */
+
+    function renderResults(data) {
+        const tone = toneOf(data.verdict);
+        lastReport = data;
+        pdfError.hidden = true;
+
+        $("verdict-band").className = `verdict tone-${tone}`;
+        $("report-url").textContent = data.target_url || "";
+        $("verdict-title").textContent = prettify(data.verdict);
+        $("verdict-summary").textContent = data.verdict_summary || "";
+        $("score-value").textContent = data.score;
+        $("report-date").textContent =
+            "Informe generado el " +
+            new Date().toLocaleString("es-CL", { dateStyle: "long", timeStyle: "short" });
+
+        $("pilares").innerHTML = PILARES.map(({ key, name, icon: ic }) => {
+            const p = data.pilares && data.pilares[key];
+            if (!p) return "";
+            const t = toneOf(p.status);
+            const pct = p.max_score ? Math.round((p.score / p.max_score) * 100) : 0;
+            return `
+                <div class="pilar tone-${t}">
+                    <div class="pilar-head">${icon(ic)}<h3>${esc(name)}</h3></div>
+                    <p class="pilar-status">${icon(TONE_ICON[t], 16)}${esc(prettify(p.status))}</p>
+                    <div class="track"><div class="fill" style="width:${pct}%"></div></div>
+                    <p class="pilar-points">${esc(p.score)} de ${esc(p.max_score)} puntos</p>
+                </div>`;
+        }).join("");
+
+        const list = $("findings-list");
+        if (data.findings && data.findings.length) {
+            list.innerHTML = data.findings
+                .map((f) => {
+                    const t = FINDING_TONE[f.status] || "info";
+                    const ticket = f.remediation_ticket
+                        ? `<div class="ticket">
+                               <div class="ticket-head">
+                                   <p class="ticket-title">${icon("i-wrench", 16)}Cómo corregirlo</p>
+                                   ${f.technical_raw ? `<code>${esc(f.technical_raw)}</code>` : ""}
+                               </div>
+                               <p>${esc(f.remediation_ticket)}</p>
+                           </div>`
+                        : "";
+                    return `
+                        <li class="finding tone-${t}">
+                            ${icon(TONE_ICON[t], 22)}
+                            <div class="finding-body">
+                                <p class="finding-pilar">${esc(pilarName(f.pilar))}</p>
+                                <h4>${esc(f.title)}</h4>
+                                <p class="finding-detail">${esc(f.detail)}</p>
+                                ${ticket}
+                            </div>
+                        </li>`;
+                })
+                .join("");
+        } else {
+            list.innerHTML = '<li class="finding"><p class="muted">No se registraron hallazgos adicionales.</p></li>';
         }
 
-        // Si se recibe ?url= en los parámetros GET de la página actual (vía bookmarklet)
-        const urlParams = new URLSearchParams(window.location.search);
-        const queryUrl = urlParams.get("url");
-        if (queryUrl) {
-            const decoded = decodeURIComponent(queryUrl);
-            targetUrlInput.value = decoded;
-            setTimeout(() => {
-                startScan(decoded);
-            }, 300);
+        results.hidden = false;
+        results.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    /* ---------- Descarga del informe en PDF (servicio del backend) ---------- */
+
+    const btnPdf = $("btn-pdf");
+    const pdfIcon = $("pdf-icon");
+    const pdfLabel = $("pdf-label");
+    const pdfError = $("pdf-error");
+    let lastReport = null;
+
+    function setPdfBusy(busy) {
+        btnPdf.disabled = busy;
+        pdfIcon.innerHTML = `<use href="#${busy ? "i-loader" : "i-download"}"/>`;
+        pdfIcon.classList.toggle("spin", busy);
+        pdfLabel.textContent = busy ? "Generando PDF..." : "Descargar informe PDF";
+    }
+
+    async function downloadPdf() {
+        if (!lastReport) return;
+        pdfError.hidden = true;
+        setPdfBusy(true);
+        try {
+            if (lastReport.pdf_report_url) {
+                window.open(lastReport.pdf_report_url, "_blank");
+            } else {
+                // Pide el PDF al backend con el resultado de la auditoría actual
+                const res = await fetch("/api/v1/audits/generate-pdf", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(lastReport),
+                });
+                if (!res.ok) throw new Error("El servidor no pudo generar el PDF.");
+                const blobUrl = URL.createObjectURL(await res.blob());
+                const a = document.createElement("a");
+                a.href = blobUrl;
+                const disposition = res.headers.get("Content-Disposition") || "";
+                const match = disposition.match(/filename="?([^";]+)"?/);
+                a.download = match ? match[1] : "DataCheck_Auditoria.pdf";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(blobUrl);
+            }
+        } catch (e) {
+            pdfError.textContent = "No se pudo descargar el PDF: " + e.message;
+            pdfError.hidden = false;
+        } finally {
+            setPdfBusy(false);
         }
+    }
+
+    /* ---------- Eventos ---------- */
+
+    form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        scan(urlInput.value);
+    });
+
+    urlInput.addEventListener("input", updateButton);
+
+    examples.forEach((btn) => {
+        btn.addEventListener("click", () => {
+            urlInput.value = btn.dataset.url;
+            scan(btn.dataset.url);
+        });
+    });
+
+    btnPdf.addEventListener("click", downloadPdf);
+
+    /* ---------- Tema claro / oscuro ---------- */
+
+    const themeBtn = $("theme-toggle");
+    const themeIcon = $("theme-icon");
+
+    function applyTheme(theme) {
+        document.documentElement.dataset.theme = theme;
+        const dark = theme === "dark";
+        themeIcon.setAttribute("href", dark ? "#i-sun" : "#i-moon");
+        const label = dark ? "Cambiar a tema claro" : "Cambiar a tema oscuro";
+        themeBtn.setAttribute("aria-label", label);
+        themeBtn.title = label;
+    }
+
+    applyTheme(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
+
+    themeBtn.addEventListener("click", () => {
+        const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+        applyTheme(next);
+        try { localStorage.setItem("datacheck-theme", next); } catch (e) {}
+    });
+
+    /* ---------- Bookmarklet y ?url= ---------- */
+
+    const bookmarklet = $("bookmarklet-link");
+    bookmarklet.href =
+        "javascript:(function(){var u=encodeURIComponent(window.location.href);" +
+        `window.open('${window.location.origin}/?url='+u,'_blank');})();`;
+    // Dentro de DataCheck solo sirve arrastrarlo a la barra de marcadores.
+    bookmarklet.addEventListener("click", (e) => e.preventDefault());
+
+    const queryUrl = new URLSearchParams(window.location.search).get("url");
+    if (queryUrl) {
+        urlInput.value = queryUrl;
+        updateButton();
+        setTimeout(() => scan(queryUrl), 300);
     }
 });

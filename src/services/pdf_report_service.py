@@ -11,6 +11,7 @@ import io
 import time
 from typing import Dict, Any, List
 from datetime import datetime, timezone
+from xml.sax.saxutils import escape
 
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
@@ -114,7 +115,7 @@ class PdfReportService:
 
         header_table_data = [
             [
-                Paragraph("<b>🛡️ DataCheck.cl</b><br/><font size='8' color='#64748B'>Plataforma de Auditoría de Cumplimiento de Datos Personales (Chile)</font>", title_style),
+                Paragraph("<b>DataCheck.cl</b><br/><font size='8' color='#64748B'>Plataforma de Auditoría de Cumplimiento de Datos Personales (Chile)</font>", title_style),
                 Paragraph(f"<b>INFORME TÉCNICO LEGAL</b><br/><font size='8'>Fecha: {timestamp_str}</font>", subtitle_style)
             ]
         ]
@@ -216,12 +217,20 @@ class PdfReportService:
                 detail = f.get("detail", "")
                 remediation = f.get("remediation_ticket", "")
                 raw = f.get("technical_raw", "")
+                pilar_name = escape(str(pilar_name))
+                title = escape(str(title))
+                detail = escape(str(detail))
+                remediation = escape(str(remediation or ""))
+                raw = escape(str(raw or ""))
 
                 # Obtener sustento legal desde el catálogo
                 citation = get_legal_basis(pilar_name, status)
                 art_ley = f.get("articulo_ley") or citation.articulo_ley
                 principio = f.get("principio_vulnerado") or citation.principio_vulnerado
                 sancion = f.get("sancion_estimada") or citation.sancion_estimada
+                art_ley = escape(str(art_ley))
+                principio = escape(str(principio))
+                sancion = escape(str(sancion))
 
                 status_color = "#10B981" if status == "OK" else ("#F59E0B" if status == "WARNING" else "#EF4444")
 
@@ -231,11 +240,11 @@ class PdfReportService:
                         Paragraph(f"<b>Pilar:</b> {pilar_name}", subtitle_style)
                     ],
                     [
-                        Paragraph(f"<b>Evidencia Técnica:</b> {detail}" + (f"<br/><code>Dato crudo: {raw}</code>" if raw else ""), body_style),
+                        Paragraph(f"<b>Evidencia Técnica:</b> {detail}" + (f"<br/><font face='Courier'>Dato crudo: {raw}</font>" if raw else ""), body_style),
                         Paragraph(f"<b>Sustento Legal:</b> {art_ley}<br/><b>Principio:</b> {principio}<br/><b>Sanción APDP:</b> {sancion}", body_style)
                     ],
                     [
-                        Paragraph(f"<b>🛠️ Ticket Técnico de Remediación:</b> {remediation}", ParagraphStyle("Rem", parent=body_style, fontName="Helvetica", textColor=colors.HexColor("#0369A1"))),
+                        Paragraph(f"<b>Ticket Técnico de Remediación:</b> {remediation}", ParagraphStyle("Rem", parent=body_style, fontName="Helvetica", textColor=colors.HexColor("#0369A1"))),
                         ""
                     ]
                 ]
