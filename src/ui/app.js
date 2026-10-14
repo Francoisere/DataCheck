@@ -140,11 +140,25 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (finding.status === "WARNING") icon = "⚠️";
                 if (finding.status === "FAIL") icon = "❌";
 
+                let remediationHtml = "";
+                if (finding.remediation_ticket) {
+                    remediationHtml = `
+                        <div class="remediation-ticket-box">
+                            <div class="ticket-header">
+                                <span class="ticket-tag">🛠️ Ticket de Remediación Técnica</span>
+                                ${finding.technical_raw ? `<code class="technical-raw-badge">${escapeHtml(finding.technical_raw)}</code>` : ""}
+                            </div>
+                            <p class="ticket-text">${escapeHtml(finding.remediation_ticket)}</p>
+                        </div>
+                    `;
+                }
+
                 item.innerHTML = `
                     <span class="finding-icon">${icon}</span>
                     <div class="finding-content">
-                        <h4>[${finding.pilar}] ${finding.title}</h4>
-                        <p>${finding.detail}</p>
+                        <h4>[${escapeHtml(finding.pilar)}] ${escapeHtml(finding.title)}</h4>
+                        <p class="finding-detail">${escapeHtml(finding.detail)}</p>
+                        ${remediationHtml}
                     </div>
                 `;
                 findingsList.appendChild(item);
@@ -152,6 +166,13 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             findingsList.innerHTML = "<p>No se registraron hallazgos adicionales.</p>";
         }
+    }
+
+    function escapeHtml(text) {
+        if (!text) return "";
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     function updatePilarCard(pilarKey, pilarData) {

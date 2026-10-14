@@ -1,24 +1,32 @@
-version: '3.8'
-
 services:
   audit-scanner:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: data_privacy_audit_scanner
+    container_name: datacheck_audit_scanner
     ports:
       - "8000:8000"
+    shm_size: '1gb'
     environment:
       - PORT=8000
-      - ENVIRONMENT=development
-      - DATABASE_URL=postgresql://postgres:postgres_pass@db:5432/privacy_audit
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres_pass@db:5432/privacy_audit
+      - SCAN_TIMEOUT_SECONDS=25.0
+      - SCAN_PAGE_TIMEOUT_MS=15000
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
 
   db:
     image: postgres:16-alpine
-    container_name: data_privacy_audit_db
+    container_name: datacheck_audit_db
     environment:
       - POSTGRES_DB=privacy_audit
       - POSTGRES_USER=postgres
@@ -27,6 +35,11 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d privacy_audit"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
 volumes:

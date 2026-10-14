@@ -1,16 +1,26 @@
 """
 Motor de Reglas de Cumplimiento Legal (Ley N° 19.628 y Nueva Ley de Protección de Datos Personales Chile).
-Evalúa los hallazgos técnicos recopilados por el inspector pasivo y determina el dictamen.
+Incremento 2:
+- Ponderación de 100 pts: Política de Privacidad (35 pts), Canales ARCO (30 pts), Consentimiento & Cookies (35 pts).
+- Dictamen determinista: APROBADO (score >= 80 y 0 trackers), CON_OBSERVACIONES (score >= 55), RECHAZADO (< 55 o trackers no autorizados con score bajo).
+- Generación sistemática de tickets técnicos de remediación (remediation_ticket) para desarrolladores (PBI-03 / RC-03).
 """
 
 from typing import Dict, Any, List
+
+LEGAL_DISCLAIMER = (
+    "DataCheck.cl es una herramienta de auditoría técnica académica de apoyo. "
+    "Este reporte no constituye asesoría jurídica formal ni certificación vinculante "
+    "de la Agencia de Protección de Datos Personales."
+)
+
 
 class RulesEngine:
     @staticmethod
     def evaluate(scan_raw_data: Dict[str, Any]) -> Dict[str, Any]:
         target_url = scan_raw_data.get("target_url", "")
-        page_load_status = scan_raw_data.get("page_load_status", 0)
-        error_message = scan_raw_data.get("error_message")
+        raw_page_status = scan_raw_data.get("page_load_status", 0)
+        page_load_status = 1 if (isinstance(raw_page_status, int) and 200 <= raw_page_status < 400) else 0
 
         tracker_audit = scan_raw_data.get("tracker_audit", {})
         privacy_audit = scan_raw_data.get("privacy_policy_audit", {})
@@ -19,86 +29,119 @@ class RulesEngine:
         score = 0
         findings: List[Dict[str, Any]] = []
 
-        # --- EVALUACIÓN PILAR 1: POLÍTICA DE PRIVACIDAD ---
+        # =========================================================================
+        # 1. PILAR: POLÍTICA DE PRIVACIDAD (Máx 35 pts)
+        # =========================================================================
         pilar_privacy_score = 0
         privacy_status = "FALLA"
 
         if privacy_audit.get("found") and privacy_audit.get("http_status") == 200:
             pilar_privacy_score += 20
             findings.append({
-                "pilar": "Política de Privacidad",
+                "pilar": "POLITICA_PRIVACIDAD",
                 "status": "OK",
                 "title": "Política de Privacidad Accesible",
-                "detail": f"Se encontró enlace a la política en: {privacy_audit.get('url')} (HTTP 200)."
+                "detail": f"Enlace a la política detectado en {privacy_audit.get('url')} respondiendo con código HTTP 200.",
+                "technical_raw": f"HTTP {privacy_audit.get('http_status')} - {privacy_audit.get('url')}",
+                "remediation_ticket": "Mantener la visibilidad y accesibilidad directa del enlace en el footer institucional."
             })
+
             if privacy_audit.get("has_mandatory_keywords"):
                 pilar_privacy_score += 15
+                found_kws = ", ".join(privacy_audit.get("found_keywords", []))
                 findings.append({
-                    "pilar": "Política de Privacidad",
+                    "pilar": "POLITICA_PRIVACIDAD",
                     "status": "OK",
-                    "title": "Contenido Normativo Mínimo Presente",
-                    "detail": f"Palabras clave esenciales detectadas: {', '.join(privacy_audit.get('found_keywords', []))}."
+                    "title": "Contenido Normativo Mínimo Verificado",
+                    "detail": f"Se detectaron términos esenciales exigidos por la ley: {found_kws}.",
+                    "technical_raw": found_kws,
+                    "remediation_ticket": "Verificar periódicamente la vigencia de las finalidades y la identificación del responsable del tratamiento."
                 })
             else:
+                missing_kws = ", ".join(privacy_audit.get("missing_keywords", []))
                 findings.append({
-                    "pilar": "Política de Privacidad",
+                    "pilar": "POLITICA_PRIVACIDAD",
                     "status": "WARNING",
-                    "title": "Texto Genérico o Incompleto",
-                    "detail": f"Faltan términos clave exigidos por la norma: {', '.join(privacy_audit.get('missing_keywords', []))}."
+                    "title": "Texto Normativo Incompleto o Genérico",
+                    "detail": f"El documento omite cláusulas esenciales requeridas: {missing_kws}.",
+                    "technical_raw": f"Faltantes: {missing_kws}",
+                    "remediation_ticket": "Actualizar el documento de política incorporando secciones explícitas de: identificación del responsable, finalidades del tratamiento y derechos de los titulares."
                 })
+
             privacy_status = "CUMPLE" if pilar_privacy_score >= 35 else "OBSERVACION"
         else:
             findings.append({
-                "pilar": "Política de Privacidad",
+                "pilar": "POLITICA_PRIVACIDAD",
                 "status": "FAIL",
-                "title": "Ausencia de Política de Privacidad",
-                "detail": "No se detectó un enlace accesible a la política de privacidad o la página retornó error."
+                "title": "Ausencia o Inaccesibilidad de Política de Privacidad",
+                "detail": "No se localizó un enlace visible o la URL de privacidad retornó un código de error HTTP.",
+                "technical_raw": f"HTTP {privacy_audit.get('http_status', 'No encontrado')}",
+                "remediation_ticket": "Publicar la Política de Privacidad en una URL pública accesible (HTTP 200) y enlazarla de forma persistente en el pie de página (footer) de todo el sitio."
             })
 
         score += pilar_privacy_score
 
-        # --- EVALUACIÓN PILAR 2: CANALES ARCO ---
+        # =========================================================================
+        # 2. PILAR: CANALES DERECHOS ARCO (Máx 30 pts)
+        # =========================================================================
         pilar_arco_score = 0
         arco_status = "FALLA"
 
         if arco_audit.get("found"):
-            if arco_audit.get("detected_emails"):
+            detected_emails = arco_audit.get("detected_emails", [])
+            has_explicit = arco_audit.get("has_explicit_arco_mention", False)
+
+            if detected_emails:
                 pilar_arco_score += 15
+                emails_str = ", ".join(detected_emails)
                 findings.append({
-                    "pilar": "Derechos ARCO",
+                    "pilar": "CANALES_ARCO",
                     "status": "OK",
                     "title": "Canal de Contacto Directo Detectado",
-                    "detail": f"Correos identificados para ejercicio de derechos: {', '.join(arco_audit.get('detected_emails', []))}."
+                    "detail": f"Canal de correo formal disponible para titulares: {emails_str}.",
+                    "technical_raw": emails_str,
+                    "remediation_ticket": "Asegurar que el buzón de correo cuente con protocolo de respuesta dentro de los plazos legales establecidos."
                 })
-            if arco_audit.get("has_explicit_arco_mention"):
+
+            if has_explicit:
                 pilar_arco_score += 15
+                terms_str = ", ".join(arco_audit.get("detected_terms", []))
                 findings.append({
-                    "pilar": "Derechos ARCO",
+                    "pilar": "CANALES_ARCO",
                     "status": "OK",
                     "title": "Mención Explícita a Derechos ARCO",
-                    "detail": f"Términos de derechos reconocidos: {', '.join(arco_audit.get('detected_terms', []))}."
+                    "detail": f"El sitio informa expresamente sobre derechos de Acceso, Rectificación, Cancelación u Oposición: {terms_str}.",
+                    "technical_raw": terms_str,
+                    "remediation_ticket": "Mantener publicado el procedimiento paso a paso para el ejercicio de cada derecho ARCO."
                 })
             elif len(arco_audit.get("detected_terms", [])) > 0:
-                pilar_arco_score += 10
+                pilar_arco_score += 5
+                terms_str = ", ".join(arco_audit.get("detected_terms", []))
                 findings.append({
-                    "pilar": "Derechos ARCO",
+                    "pilar": "CANALES_ARCO",
                     "status": "WARNING",
-                    "title": "Términos de Contacto Detectados",
-                    "detail": f"Coincidencias encontradas: {', '.join(arco_audit.get('detected_terms', []))}."
+                    "title": "Mención Parcial de Derechos del Titular",
+                    "detail": f"Se identificaron términos generales ({terms_str}) pero sin mención exhaustiva de los derechos ARCO.",
+                    "technical_raw": terms_str,
+                    "remediation_ticket": "Detallar expresamente en la política los derechos de Acceso, Rectificación, Cancelación y Oposición según la Ley N° 19.628."
                 })
-            
+
             arco_status = "CUMPLE" if pilar_arco_score >= 25 else "OBSERVACION"
         else:
             findings.append({
-                "pilar": "Derechos ARCO",
+                "pilar": "CANALES_ARCO",
                 "status": "FAIL",
-                "title": "Sin Canales Formales para Derechos ARCO",
-                "detail": "No se identificaron canales visibles ni correos electrónicos para gestionar solicitudes de acceso, rectificación, cancelación u oposición."
+                "title": "Sin Canales Formales para Ejercicio de Derechos ARCO",
+                "detail": "No se detectaron correos ni mecanismos claros para que el titular gestione sus derechos de datos personales.",
+                "technical_raw": "0 canales identificados",
+                "remediation_ticket": "Habilitar un canal de comunicación directo (ej: privacidad@dominio.cl o formulario web dedicado) e indicarlo claramente en la política."
             })
 
         score += pilar_arco_score
 
-        # --- EVALUACIÓN PILAR 3: CONSENTIMIENTO Y COOKIES ---
+        # =========================================================================
+        # 3. PILAR: CONSENTIMIENTO Y COOKIES (Máx 35 pts)
+        # =========================================================================
         pilar_consent_score = 0
         consent_status = "FALLA"
 
@@ -110,39 +153,75 @@ class RulesEngine:
             pilar_consent_score = 35
             consent_status = "CUMPLE"
             findings.append({
-                "pilar": "Cookies y Rastreadores",
+                "pilar": "CONSENTIMIENTO_COOKIES",
                 "status": "OK",
                 "title": "Navegación Limpia Previa al Consentimiento",
-                "detail": "No se depositaron cookies de rastreo de terceros ni se realizaron peticiones a dominios de rastreo publicitario/analítico antes de la interacción del usuario."
+                "detail": "No se detectó inyección de cookies de terceros ni solicitudes salientes hacia dominios de rastreo publicitario previo a la interacción del usuario.",
+                "technical_raw": "0 trackers activos pre-consentimiento",
+                "remediation_ticket": "Mantener el bloqueo preventivo por defecto (opt-in) de todos los scripts de analítica y publicidad."
             })
         else:
             pilar_consent_score = 0
             consent_status = "FALLA"
-            details = []
-            if detected_domains:
-                details.append(f"Dominios de rastreo activos: {', '.join(detected_domains)}")
-            if detected_cookies:
-                details.append(f"Cookies de rastreo inyectadas: {', '.join(detected_cookies)}")
+            for domain in detected_domains:
+                findings.append({
+                    "pilar": "CONSENTIMIENTO_COOKIES",
+                    "status": "FAIL",
+                    "title": "Inyección no autorizada de rastreador externo",
+                    "detail": f"Petición saliente interceptada hacia dominio de rastreo: '{domain}' antes de recibir consentimiento explícito.",
+                    "technical_raw": domain,
+                    "remediation_ticket": (
+                        f"Condicionar la carga y ejecución de los scripts asociados a '{domain}' "
+                        f"(ej. vía Google Tag Manager o gestor de consentimiento CMP) al evento de aceptación explícita del usuario."
+                    )
+                })
 
-            findings.append({
-                "pilar": "Cookies y Rastreadores",
-                "status": "FAIL",
-                "title": "Inyección Pasiva No Autorizada de Rastreadores",
-                "detail": " | ".join(details)
-            })
+            for cookie in detected_cookies:
+                findings.append({
+                    "pilar": "CONSENTIMIENTO_COOKIES",
+                    "status": "FAIL",
+                    "title": "Depósito no autorizado de cookie de rastreo",
+                    "detail": f"Cookie no esencial '{cookie}' depositada en el navegador previo a la interacción del usuario.",
+                    "technical_raw": cookie,
+                    "remediation_ticket": (
+                        f"Configurar la cookie '{cookie}' para que solo se almacene tras la confirmación de consentimiento, "
+                        f"bloqueando su emisión en la respuesta inicial HTTP Set-Cookie o script local."
+                    )
+                })
 
         score += pilar_consent_score
 
-        # --- DICTAMEN FINAL ---
-        if score >= 80 and not has_unauthorized:
+        # =========================================================================
+        # DICTAMEN FINAL DETERMINISTA (C-01 / C-04 / TEST-RULE-04)
+        # =========================================================================
+        # Regla estricta Roadmap Fase 3:
+        # - RECHAZADO: Inyección de trackers/cookies sin consentimiento previo o ausencia de política.
+        # - APROBADO: Política funcional con contenido normativo mínimo, mención de derechos y 0 trackers.
+        # - CON_OBSERVACIONES: Política genérica/incompleta, canales parciales o advertencias normativas.
+        if has_unauthorized:
+            verdict = "RECHAZADO"
+            verdict_summary = (
+                "Incumplimiento crítico: Se detectaron rastreadores de terceros o cookies "
+                "no esenciales activos previo al consentimiento del usuario."
+            )
+        elif score >= 80 and privacy_audit.get("has_mandatory_keywords", False):
             verdict = "APROBADO"
-            verdict_summary = "El sitio cumple con los pilares fundamentales de transparencia, disponibilidad de políticas y respeto al consentimiento previo de rastreo."
+            verdict_summary = (
+                "Conforme: El sitio web cumple con los estándares auditados de transparencia, "
+                "disponibilidad de políticas y canales para el ejercicio de derechos ARCO."
+            )
         elif score >= 55:
             verdict = "CON_OBSERVACIONES"
-            verdict_summary = "El sitio presenta cumplimiento parcial. Existen advertencias en la redacción de la política, canales ARCO o presencia de rastreadores."
+            verdict_summary = (
+                "Cumplimiento parcial: El sitio presenta advertencias técnicas en la formulación "
+                "de la política de privacidad o en la exhaustividad de los canales ARCO."
+            )
         else:
             verdict = "RECHAZADO"
-            verdict_summary = "El sitio incumple los estándares mínimos auditados: ausencia/inaccesibilidad de políticas de privacidad o inyección de cookies sin consentimiento explícito."
+            verdict_summary = (
+                "Incumplimiento: Ausencia o inaccesibilidad de la política de privacidad "
+                "y carencia de canales formales para el ejercicio de derechos del titular."
+            )
 
         return {
             "target_url": target_url,
@@ -169,5 +248,5 @@ class RulesEngine:
             },
             "findings": findings,
             "technical_raw": scan_raw_data,
-            "legal_disclaimer": "Este diagnóstico es una herramienta técnica de auditoría académica basada en la legislación chilena (Ley N° 19.628). No constituye una certificación ni dictamen jurídico vinculante."
+            "legal_disclaimer": LEGAL_DISCLAIMER
         }
