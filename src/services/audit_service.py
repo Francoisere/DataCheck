@@ -52,10 +52,18 @@ class AuditService:
         audit_result = RulesEngine.evaluate(scan_raw)
         duracion_ms = int((time.perf_counter() - start_time) * 1000)
 
+        # Enriquecer cada hallazgo con sustento normativo (Ley 21.719)
+        from src.core.legal_catalog import get_legal_basis
+        for f in audit_result.get("findings", []):
+            citation = get_legal_basis(f.get("pilar", ""), f.get("status", ""))
+            f["articulo_ley"] = citation.articulo_ley
+            f["principio_vulnerado"] = citation.principio_vulnerado
+            f["sancion_estimada"] = citation.sancion_estimada
+
         # 4. Persistencia relacional (si la sesión está disponible)
         if db_session:
             try:
-                await self._persist_audit_result(
+                saved_audit_id = await self._persist_audit_result(
                     db=db_session,
                     normalized_url=normalized_url,
                     domain=domain,
@@ -63,6 +71,9 @@ class AuditService:
                     scan_raw=scan_raw,
                     duracion_ms=duracion_ms
                 )
+                if saved_audit_id:
+                    audit_result["audit_id"] = str(saved_audit_id)
+                    audit_result["pdf_report_url"] = f"/api/v1/audits/{saved_audit_id}/pdf"
             except Exception as e:
                 logger.warning(f"No se pudo persistir la auditoría en PostgreSQL: {e}")
 
@@ -160,3 +171,5 @@ class AuditService:
                 valor=cookie_name[:255],
                 categoria="TRACKER_COOKIE"
             ))
+
+        return auditoria.id

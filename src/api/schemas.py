@@ -28,9 +28,14 @@ class RemediationFinding(BaseModel):
     detail: str = Field(..., description="Detalle técnico del hallazgo (máx. 300 caracteres)")
     technical_raw: Optional[str] = Field(None, description="Dato técnico crudo (dominio, cookie, código HTTP)")
     remediation_ticket: str = Field(..., description="Ticket técnico con recomendación accionable para desarrolladores")
+    # Sustento normativo Ley 21.719
+    articulo_ley: Optional[str] = Field(None, description="Artículo legal vulnerado o conforme (Ley 21.719)")
+    principio_vulnerado: Optional[str] = Field(None, description="Principio legal afectado")
+    sancion_estimada: Optional[str] = Field(None, description="Rango sancionatorio potencial ante la APDP")
 
 
 class ScanResponse(BaseModel):
+    audit_id: Optional[str] = Field(None, description="Identificador único UUID de la auditoría en PostgreSQL")
     target_url: str = Field(..., description="URL normalizada y auditada")
     page_load_status: int = Field(..., description="1 si cargó correctamente, 0 en caso de error/bloqueo")
     verdict: str = Field(..., description="Dictamen: APROBADO | CON_OBSERVACIONES | RECHAZADO")
@@ -40,3 +45,5 @@ class ScanResponse(BaseModel):
     findings: List[RemediationFinding] = Field(..., description="Lista de evidencias técnicas y tickets de remediación")
     technical_raw: Optional[Dict[str, Any]] = Field(None, description="Metadatos técnicos complementarios")
     legal_disclaimer: str = Field(..., description="Aviso legal de descargo de responsabilidad académica")
+    pdf_report_url: Optional[str] = Field(None, description="Enlace para descargar el informe oficial en PDF")
+

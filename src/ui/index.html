@@ -11,7 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
     
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=2.1">
 </head>
 <body>
     <div class="glow-bg"></div>
@@ -90,7 +90,12 @@
                         </div>
                     </div>
                     <div class="verdict-text">
-                        <h2 id="target-url-display">https://ejemplo.cl</h2>
+                        <div class="verdict-title-row">
+                            <h2 id="target-url-display">https://ejemplo.cl</h2>
+                            <button type="button" id="btn-download-pdf" class="btn-download-pdf">
+                                📄 Descargar Informe Oficial PDF (Ley 21.719)
+                            </button>
+                        </div>
                         <p id="verdict-summary">El sitio cumple con los estándares mínimos normativos auditados.</p>
                     </div>
                 </div>
@@ -205,6 +210,6 @@
         </div>
     </footer>
 
-    <script src="app.js"></script>
+    <script src="app.js?v=2.1"></script>
 </body>
 </html>

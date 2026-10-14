@@ -121,6 +121,46 @@ document.addEventListener("DOMContentLoaded", () => {
         verdictBadge.textContent = data.verdict;
         verdictBadge.className = "verdict-badge " + data.verdict.toLowerCase().replace("_", "");
 
+        // PDF Download Button
+        const btnPdf = document.getElementById("btn-download-pdf");
+        if (btnPdf) {
+            btnPdf.style.display = "inline-flex";
+            btnPdf.onclick = async () => {
+                const originalText = btnPdf.textContent;
+                btnPdf.textContent = "⏳ Generando PDF...";
+                btnPdf.disabled = true;
+
+                try {
+                    if (data.pdf_report_url) {
+                        window.open(data.pdf_report_url, "_blank");
+                    } else {
+                        // Fallback directo generando el PDF a partir del payload actual
+                        const pdfRes = await fetch("/api/v1/audits/generate-pdf", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(data)
+                        });
+                        if (!pdfRes.ok) throw new Error("Error al generar el PDF");
+                        const blob = await pdfRes.blob();
+                        const blobUrl = window.URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = blobUrl;
+                        a.download = `DataCheck_Auditoria_${(data.target_url || "sitio").replace(/[^a-zA-Z0-9]/g, "_")}.pdf`;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        window.URL.revokeObjectURL(blobUrl);
+                    }
+                } catch (err) {
+                    alert("Error al descargar el PDF: " + err.message);
+                } finally {
+                    btnPdf.textContent = originalText;
+                    btnPdf.disabled = false;
+                }
+            };
+        }
+
+
         // Pilares
         updatePilarCard("privacy", data.pilares.politica_privacidad);
         updatePilarCard("arco", data.pilares.canales_arco);

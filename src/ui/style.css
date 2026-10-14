@@ -375,6 +375,46 @@ body {
     margin-left: 4px;
 }
 
+.verdict-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+}
+
+.btn-download-pdf {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #0284C7, #0EA5E9);
+    color: #FFFFFF;
+    font-family: var(--font-heading);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 10px 18px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+    transition: all 0.2s ease;
+}
+
+.btn-download-pdf:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(2, 132, 199, 0.55);
+    background: linear-gradient(135deg, #0369A1, #0284C7);
+    color: #FFFFFF;
+}
+
+.btn-download-pdf:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
 /* Pilares Grid */
 .pilares-grid {
     display: grid;
