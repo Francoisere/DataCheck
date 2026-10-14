@@ -2,7 +2,7 @@
 Motor de Reglas de Cumplimiento Legal (Ley N° 19.628 y Nueva Ley de Protección de Datos Personales Chile).
 Incremento 2:
 - Ponderación de 100 pts: Política de Privacidad (35 pts), Canales ARCO (30 pts), Consentimiento & Cookies (35 pts).
-- Dictamen determinista: APROBADO (score >= 80 y 0 trackers), CON_OBSERVACIONES (score >= 55), RECHAZADO (< 55 o trackers no autorizados con score bajo).
+- Dictamen determinista: APROBADO (score >= 80 y 0 trackers), CON_OBSERVACIONES (score >= 55 o banner sin opción de rechazo), RECHAZADO (< 55 o trackers no autorizados con score bajo).
 - Generación sistemática de tickets técnicos de remediación (remediation_ticket) para desarrolladores (PBI-03 / RC-03).
 """
 
@@ -25,6 +25,8 @@ class RulesEngine:
         tracker_audit = scan_raw_data.get("tracker_audit", {})
         privacy_audit = scan_raw_data.get("privacy_policy_audit", {})
         arco_audit = scan_raw_data.get("arco_channels_audit", {})
+        consent_banner_audit = scan_raw_data.get("consent_banner_audit")
+        frames_audit = scan_raw_data.get("frames_audit")
 
         score = 0
         findings: List[Dict[str, Any]] = []
@@ -149,9 +151,22 @@ class RulesEngine:
         detected_domains = tracker_audit.get("detected_tracker_domains", [])
         detected_cookies = tracker_audit.get("detected_tracker_cookies", [])
 
+        banner_audit = consent_banner_audit or {}
+        banner_detected = banner_audit.get("banner_detected", False)
+        has_reject_option = banner_audit.get("has_reject_option", False)
+
+        # Ajuste de puntaje del pilar de consentimiento según presencia de rastreadores y banner
         if not has_unauthorized:
-            pilar_consent_score = 35
-            consent_status = "CUMPLE"
+            if banner_detected and has_reject_option:
+                pilar_consent_score = 35
+                consent_status = "CUMPLE"
+            elif banner_detected and not has_reject_option:
+                pilar_consent_score = 20
+                consent_status = "OBSERVACION"
+            else:
+                pilar_consent_score = 25
+                consent_status = "CUMPLE"
+
             findings.append({
                 "pilar": "CONSENTIMIENTO_COOKIES",
                 "status": "OK",
@@ -189,6 +204,65 @@ class RulesEngine:
                     )
                 })
 
+        # Hallazgos de auditoría de banner de consentimiento (Paso 10)
+        if banner_detected and not has_reject_option:
+            cmp_provider = banner_audit.get("cmp_provider")
+            buttons = banner_audit.get("detected_buttons", [])
+            tech_raw_parts = []
+            if cmp_provider:
+                tech_raw_parts.append(f"CMP: {cmp_provider}")
+            if buttons:
+                tech_raw_parts.append(f"Botones: {', '.join(buttons)}")
+            tech_raw = " | ".join(tech_raw_parts) if tech_raw_parts else "Banner sin opción de rechazo"
+
+            findings.append({
+                "pilar": "CONSENTIMIENTO_COOKIES",
+                "status": "WARNING",
+                "title": "Banner de Consentimiento Sin Opción Real de Rechazo",
+                "detail": (
+                    "El banner o modal de cookies detectado es puramente informativo y no ofrece una opción "
+                    "real y accesible para que el titular pueda rechazar o configurar cookies no esenciales."
+                ),
+                "technical_raw": tech_raw,
+                "remediation_ticket": (
+                    "Implementar en el banner una opción visible y simétrica para rechazar cookies no esenciales "
+                    "(ej. botón 'Rechazar todas' o panel de configuración granular) al mismo nivel visual que el botón "
+                    "de aceptación, conforme a las exigencias del Roadmap y la Ley N° 19.628."
+                )
+            })
+        elif banner_detected and has_reject_option:
+            cmp_provider = banner_audit.get("cmp_provider")
+            tech_raw = f"CMP: {cmp_provider} - Opción de rechazo verificada" if cmp_provider else "Banner con opción de rechazo"
+            findings.append({
+                "pilar": "CONSENTIMIENTO_COOKIES",
+                "status": "OK",
+                "title": "Mecanismo de Consentimiento con Opción de Rechazo",
+                "detail": (
+                    "Se verificó la existencia de un banner de consentimiento que ofrece controles adecuados "
+                    "y simétricos al usuario, incluyendo la opción explícita de rechazar cookies."
+                ),
+                "technical_raw": tech_raw,
+                "remediation_ticket": (
+                    "Mantener la vigencia de los controles del banner de consentimiento y asegurar la simetría "
+                    "entre las acciones de aceptar y rechazar."
+                )
+            })
+        elif not banner_detected and has_unauthorized:
+            findings.append({
+                "pilar": "CONSENTIMIENTO_COOKIES",
+                "status": "FAIL",
+                "title": "Ausencia de Mecanismo de Consentimiento con Rastreadores Activos",
+                "detail": (
+                    "El sitio web ejecuta rastreadores de terceros o deposita cookies de rastreo sin desplegar "
+                    "un banner o mecanismo previo para recabar el consentimiento del usuario."
+                ),
+                "technical_raw": "0 mecanismos de consentimiento detectados",
+                "remediation_ticket": (
+                    "Implementar de forma urgente una plataforma de gestión de consentimiento (CMP) o banner "
+                    "con bloqueo preventivo (opt-in) que impida la activación de scripts de rastreo antes de la decisión del usuario."
+                )
+            })
+
         score += pilar_consent_score
 
         # =========================================================================
@@ -197,25 +271,34 @@ class RulesEngine:
         # Regla estricta Roadmap Fase 3:
         # - RECHAZADO: Inyección de trackers/cookies sin consentimiento previo o ausencia de política.
         # - APROBADO: Política funcional con contenido normativo mínimo, mención de derechos y 0 trackers.
-        # - CON_OBSERVACIONES: Política genérica/incompleta, canales parciales o advertencias normativas.
+        # - CON_OBSERVACIONES: Política genérica/incompleta, canales parciales o advertencias normativas,
+        #   o banner de cookies puramente informativo sin opción real de rechazo o configuración.
+        banner_lacks_reject = banner_detected and not has_reject_option
+
         if has_unauthorized:
             verdict = "RECHAZADO"
             verdict_summary = (
                 "Incumplimiento crítico: Se detectaron rastreadores de terceros o cookies "
                 "no esenciales activos previo al consentimiento del usuario."
             )
-        elif score >= 80 and privacy_audit.get("has_mandatory_keywords", False):
+        elif score >= 80 and privacy_audit.get("has_mandatory_keywords", False) and not banner_lacks_reject:
             verdict = "APROBADO"
             verdict_summary = (
                 "Conforme: El sitio web cumple con los estándares auditados de transparencia, "
                 "disponibilidad de políticas y canales para el ejercicio de derechos ARCO."
             )
-        elif score >= 55:
+        elif score >= 55 or banner_lacks_reject:
             verdict = "CON_OBSERVACIONES"
-            verdict_summary = (
-                "Cumplimiento parcial: El sitio presenta advertencias técnicas en la formulación "
-                "de la política de privacidad o en la exhaustividad de los canales ARCO."
-            )
+            if banner_lacks_reject:
+                verdict_summary = (
+                    "Cumplimiento parcial: Banner de cookies puramente informativo sin opción real "
+                    "de rechazo o configuración."
+                )
+            else:
+                verdict_summary = (
+                    "Cumplimiento parcial: El sitio presenta advertencias técnicas en la formulación "
+                    "de la política de privacidad o en la exhaustividad de los canales ARCO."
+                )
         else:
             verdict = "RECHAZADO"
             verdict_summary = (
@@ -248,5 +331,7 @@ class RulesEngine:
             },
             "findings": findings,
             "technical_raw": scan_raw_data,
+            "consent_banner_audit": consent_banner_audit,
+            "frames_audit": frames_audit,
             "legal_disclaimer": LEGAL_DISCLAIMER
         }

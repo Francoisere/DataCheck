@@ -34,6 +34,28 @@ class RemediationFinding(BaseModel):
     sancion_estimada: Optional[str] = Field(None, description="Rango sancionatorio potencial ante la APDP")
 
 
+class ConsentBannerAudit(BaseModel):
+    banner_detected: bool = Field(..., description="Si se detectó un banner/modal de consentimiento de cookies")
+    cmp_provider: Optional[str] = Field(None, description="Proveedor CMP identificado (cookiebot, onetrust, didomi, etc.)")
+    has_reject_option: bool = Field(False, description="Si el banner ofrece opción real de rechazo")
+    has_accept_option: bool = Field(False, description="Si el banner ofrece botón de aceptar")
+    has_settings_option: bool = Field(False, description="Si el banner ofrece opción de configurar/personalizar")
+    detected_buttons: List[str] = Field(default_factory=list, description="Textos de botones detectados en el banner")
+    banner_source_frame: Optional[str] = Field(None, description="URL del frame donde se detectó el banner")
+
+
+class FrameInfo(BaseModel):
+    url: str = Field(..., description="URL del frame")
+    origin: str = Field(..., description="Origen del frame")
+    is_third_party: bool = Field(..., description="Si el frame es de un origen de terceros")
+
+
+class FramesAudit(BaseModel):
+    total_frames: int = Field(..., description="Número total de frames detectados")
+    third_party_frames: List[FrameInfo] = Field(default_factory=list, description="Frames de terceros detectados")
+    cmp_frames: List[FrameInfo] = Field(default_factory=list, description="Frames de CMPs de consentimiento detectados")
+
+
 class ScanResponse(BaseModel):
     audit_id: Optional[str] = Field(None, description="Identificador único UUID de la auditoría en PostgreSQL")
     target_url: str = Field(..., description="URL normalizada y auditada")
@@ -44,6 +66,8 @@ class ScanResponse(BaseModel):
     pilares: Dict[str, PilarScore] = Field(..., description="Desglose por los 3 pilares legales auditables")
     findings: List[RemediationFinding] = Field(..., description="Lista de evidencias técnicas y tickets de remediación")
     technical_raw: Optional[Dict[str, Any]] = Field(None, description="Metadatos técnicos complementarios")
+    consent_banner_audit: Optional[ConsentBannerAudit] = Field(None, description="Resultado de la detección de banner de consentimiento")
+    frames_audit: Optional[FramesAudit] = Field(None, description="Resultado del análisis de frames e iframes")
     legal_disclaimer: str = Field(..., description="Aviso legal de descargo de responsabilidad académica")
     pdf_report_url: Optional[str] = Field(None, description="Enlace para descargar el informe oficial en PDF")
 
