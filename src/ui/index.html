@@ -3,213 +3,186 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DataCheck.cl - Auditoría de Cumplimiento de Datos Personales (Chile)</title>
-    <meta name="description" content="DataCheck.cl - Herramienta de escaneo e inspección pasiva para el cumplimiento de la Ley N° 19.628 de Protección de Datos Personales en Chile.">
-    
-    <!-- Google Fonts -->
+    <title>DataCheck.cl - Revisa el cumplimiento de datos personales en Chile</title>
+    <meta name="description" content="Herramienta de inspección pasiva para revisar si un sitio web cumple con la Ley N° 19.628 de Protección de Datos Personales en Chile.">
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-    
-    <link rel="stylesheet" href="style.css?v=2.1">
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&display=swap" rel="stylesheet">
+    <script>
+        // Aplica el tema guardado antes de pintar la página para evitar parpadeos
+        (function () {
+            try {
+                var t = localStorage.getItem("datacheck-theme");
+                if (!t) t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+                document.documentElement.dataset.theme = t;
+            } catch (e) {}
+        })();
+    </script>
+    <link rel="stylesheet" href="style.css?v=2.3">
 </head>
 <body>
-    <div class="glow-bg"></div>
+    <!-- Íconos (estilo Lucide) -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+        <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+        <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+        <symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+        <symbol id="i-cookie" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10 4 4 0 0 1-5-5 4 4 0 0 1-5-5"/><path d="M8.5 8.5v.01"/><path d="M16 15.5v.01"/><path d="M12 12v.01"/><path d="M11 17v.01"/><path d="M7 14v.01"/></symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+        <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+        <symbol id="i-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
+        <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+        <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+        <symbol id="i-bookmark" viewBox="0 0 24 24"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></symbol>
+        <symbol id="i-loader" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></symbol>
+        <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+    </svg>
 
-    <header class="app-header">
-        <div class="container header-container">
-            <div class="logo">
-                <span class="logo-icon">🛡️</span>
-                <span class="logo-title">DataCheck<span class="highlight">.cl</span></span>
-                <span class="logo-badge">CHILE</span>
-            </div>
-            <nav class="nav-links">
-                <a href="#scanner-section" class="active">Escáner</a>
-                <a href="#bookmarklet-section">Botón Navegador</a>
-                <a href="#normativa-section">Normativa</a>
+    <header class="site-header">
+        <div class="wrap header-inner">
+            <a href="#inicio" class="brand">
+                <span class="brand-mark"><svg class="icon" width="18" height="18"><use href="#i-shield"/></svg></span>
+                <span class="brand-name">DataCheck.cl</span>
+            </a>
+            <nav class="nav">
+                <a href="#criterios">Qué se revisa</a>
+                <a href="#marcador">Botón del navegador</a>
+                <button type="button" id="theme-toggle" class="theme-toggle" aria-label="Cambiar a tema oscuro" title="Cambiar a tema oscuro">
+                    <svg class="icon" width="18" height="18"><use id="theme-icon" href="#i-moon"/></svg>
+                </button>
             </nav>
         </div>
     </header>
 
-    <main class="container">
-        <!-- Hero Section -->
-        <section id="scanner-section" class="hero-section">
-            <div class="hero-badge">FASE 1: PRUEBA DE CONCEPTO</div>
-            <h1 class="hero-title">Auditoría Pasiva de Cumplimiento de Datos Personales</h1>
-            <p class="hero-subtitle">
-                Evalúa en tiempo real si un sitio web cumple con la <strong>Ley N° 19.628</strong> (y la Nueva Ley de Protección de Datos Personales de Chile) mediante inspección pasiva sin interacción.
+    <main class="wrap">
+        <!-- Inicio -->
+        <section id="inicio" class="hero">
+            <h1>Revisa si un sitio web protege los datos de sus usuarios</h1>
+            <p class="lead">
+                Escribe una dirección y revisamos su política de privacidad, los canales para ejercer
+                derechos ARCO y si carga rastreadores antes de pedir consentimiento, según la Ley 19.628.
             </p>
 
-            <form id="scan-form" class="scan-form-card">
-                <div class="input-group">
-                    <span class="url-icon">🌐</span>
-                    <input 
-                        type="url" 
-                        id="target-url-input" 
-                        placeholder="https://ejemplo.cl" 
-                        required 
-                        autocomplete="off"
-                    >
-                    <button type="submit" id="btn-scan" class="btn-primary">
-                        <span class="btn-text">Auditar Sitio</span>
-                        <span class="btn-spinner hidden"></span>
-                    </button>
-                </div>
-                <div class="quick-examples">
-                    <span>Probar URLs de ejemplo:</span>
-                    <button type="button" class="btn-chip" data-url="https://gob.cl">gob.cl</button>
-                    <button type="button" class="btn-chip" data-url="https://www.bancochile.cl">bancochile.cl</button>
-                    <button type="button" class="btn-chip" data-url="https://www.falabella.com">falabella.com</button>
-                </div>
+            <form id="scan-form" class="scan-form" novalidate>
+                <label for="url-input" class="sr-only">Dirección del sitio</label>
+                <input id="url-input" type="text" inputmode="url" autocomplete="off" placeholder="ejemplo.cl">
+                <button id="btn-scan" type="submit" class="btn-primary" disabled>
+                    <svg class="icon" width="20" height="20" id="btn-icon"><use href="#i-search"/></svg>
+                    <span id="btn-label">Revisar sitio</span>
+                </button>
             </form>
-        </section>
 
-        <!-- Loading Indicator -->
-        <div id="loading-state" class="loading-card hidden">
-            <div class="scanner-beam"></div>
-            <div class="loading-content">
-                <div class="spinner-lg"></div>
-                <h3>Ejecutando Inspección Pasiva en Playwright...</h3>
-                <p id="loading-step">Cargando sitio web y monitoreando tráfico saliente...</p>
-                <div class="progress-bar-track">
-                    <div id="progress-bar-fill" class="progress-bar-fill"></div>
+            <p class="examples">
+                Prueba con
+                <button type="button" class="link-btn" data-url="gob.cl">gob.cl</button>,
+                <button type="button" class="link-btn" data-url="bancochile.cl">bancochile.cl</button>,
+                <button type="button" class="link-btn" data-url="falabella.com">falabella.com</button>
+            </p>
+
+            <div id="loading" class="loading" role="status" aria-live="polite" hidden>
+                <p id="loading-step" class="loading-step"></p>
+                <div class="track"><div id="progress-fill" class="fill"></div></div>
+                <p class="muted small">Puede tardar unos segundos según el sitio.</p>
+            </div>
+
+            <div id="error" class="error-box" role="alert" hidden>
+                <svg class="icon" width="20" height="20"><use href="#i-x"/></svg>
+                <div>
+                    <p class="error-title">No se pudo revisar el sitio</p>
+                    <p id="error-message"></p>
+                    <p class="muted">Comprueba la dirección y que el servidor de DataCheck esté en ejecución.</p>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <!-- Results Dashboard -->
-        <div id="results-dashboard" class="results-dashboard hidden">
-            <!-- Summary Header Card -->
-            <div class="result-header-card" id="verdict-banner">
-                <div class="verdict-main">
-                    <div class="verdict-badge-wrapper">
-                        <span id="verdict-badge" class="verdict-badge">APROBADO</span>
-                        <div class="score-circle">
-                            <span id="score-value">90</span>
-                            <span class="score-max">/100</span>
-                        </div>
-                    </div>
+        <!-- Resultados -->
+        <section id="results" class="results" aria-label="Resultados" hidden>
+            <article class="report">
+                <div id="verdict-band" class="verdict">
                     <div class="verdict-text">
-                        <div class="verdict-title-row">
-                            <h2 id="target-url-display">https://ejemplo.cl</h2>
-                            <button type="button" id="btn-download-pdf" class="btn-download-pdf">
-                                📄 Descargar Informe Oficial PDF (Ley 21.719)
-                            </button>
-                        </div>
-                        <p id="verdict-summary">El sitio cumple con los estándares mínimos normativos auditados.</p>
+                        <p id="report-url" class="report-url"></p>
+                        <h2 id="verdict-title"></h2>
+                        <p id="verdict-summary" class="verdict-summary"></p>
                     </div>
-                </div>
-            </div>
-
-            <!-- Pillars Grid -->
-            <div class="pilares-grid">
-                <!-- Pilar 1 -->
-                <div class="pilar-card" id="pilar-privacy">
-                    <div class="pilar-header">
-                        <span class="pilar-icon">📜</span>
-                        <div class="pilar-title-group">
-                            <h3>Política de Privacidad</h3>
-                            <span class="pilar-status-badge" id="pilar-privacy-badge">CUMPLE</span>
-                        </div>
-                    </div>
-                    <div class="pilar-body">
-                        <div class="pilar-score-bar">
-                            <div id="pilar-privacy-fill" class="score-fill" style="width: 100%;"></div>
-                        </div>
-                        <p class="pilar-score-num" id="pilar-privacy-num">35 / 35 pts</p>
-                    </div>
+                    <p class="score"><span id="score-value"></span><span class="score-of">de 100</span></p>
                 </div>
 
-                <!-- Pilar 2 -->
-                <div class="pilar-card" id="pilar-arco">
-                    <div class="pilar-header">
-                        <span class="pilar-icon">✉️</span>
-                        <div class="pilar-title-group">
-                            <h3>Derechos ARCO</h3>
-                            <span class="pilar-status-badge" id="pilar-arco-badge">CUMPLE</span>
-                        </div>
+                <div id="pilares" class="pilares"></div>
+
+                <div class="findings">
+                    <div class="findings-head">
+                        <h3>Hallazgos</h3>
+                        <button type="button" id="btn-pdf" class="btn-ghost">
+                            <svg class="icon" width="16" height="16" id="pdf-icon"><use href="#i-download"/></svg>
+                            <span id="pdf-label">Descargar informe PDF</span>
+                        </button>
                     </div>
-                    <div class="pilar-body">
-                        <div class="pilar-score-bar">
-                            <div id="pilar-arco-fill" class="score-fill" style="width: 100%;"></div>
-                        </div>
-                        <p class="pilar-score-num" id="pilar-arco-num">30 / 30 pts</p>
-                    </div>
+                    <p id="pdf-error" class="pdf-error" role="alert" hidden></p>
+                    <ul id="findings-list" class="findings-list"></ul>
                 </div>
 
-                <!-- Pilar 3 -->
-                <div class="pilar-card" id="pilar-cookies">
-                    <div class="pilar-header">
-                        <span class="pilar-icon">🍪</span>
-                        <div class="pilar-title-group">
-                            <h3>Consentimiento & Cookies</h3>
-                            <span class="pilar-status-badge" id="pilar-cookies-badge">CUMPLE</span>
-                        </div>
-                    </div>
-                    <div class="pilar-body">
-                        <div class="pilar-score-bar">
-                            <div id="pilar-cookies-fill" class="score-fill" style="width: 100%;"></div>
-                        </div>
-                        <p class="pilar-score-num" id="pilar-cookies-num">35 / 35 pts</p>
-                    </div>
+                <p id="report-date" class="report-date"></p>
+            </article>
+
+            <p class="disclaimer">
+                <svg class="icon" width="18" height="18"><use href="#i-info"/></svg>
+                <span>Este diagnóstico es una herramienta técnica de auditoría académica basada en la Ley N° 19.628. No es una certificación ni un dictamen jurídico vinculante.</span>
+            </p>
+        </section>
+
+        <!-- Qué se revisa -->
+        <section id="criterios" class="section">
+            <div class="panel">
+            <h2>Qué se revisa</h2>
+            <p class="muted section-lead">
+                La revisión es pasiva: solo observamos lo que el sitio muestra y envía al cargar, sin
+                interactuar con formularios ni iniciar sesión.
+            </p>
+            <div class="criteria">
+                <div class="criteria-card">
+                    <span class="criteria-icon"><svg class="icon" width="22" height="22"><use href="#i-file"/></svg></span>
+                    <h3>Política de privacidad</h3>
+                    <p>Debe ser accesible desde el pie de página, responder con HTTP 200 e indicar quién trata los datos y para qué.</p>
+                </div>
+                <div class="criteria-card">
+                    <span class="criteria-icon"><svg class="icon" width="22" height="22"><use href="#i-mail"/></svg></span>
+                    <h3>Canales para derechos ARCO</h3>
+                    <p>Tiene que haber un correo o formulario visible para pedir acceso, rectificación, cancelación u oposición.</p>
+                </div>
+                <div class="criteria-card">
+                    <span class="criteria-icon"><svg class="icon" width="22" height="22"><use href="#i-cookie"/></svg></span>
+                    <h3>Rastreadores bloqueados</h3>
+                    <p>Ningún script ni cookie de terceros, como Google Analytics o Meta Pixel, puede cargar antes de que el usuario acepte.</p>
                 </div>
             </div>
-
-            <!-- Findings List -->
-            <div class="findings-card">
-                <h3>Evidencias Técnicas y Hallazgos</h3>
-                <div id="findings-list" class="findings-list">
-                    <!-- Dynamic findings inserted here -->
-                </div>
-            </div>
-
-            <!-- Disclaimer Notice -->
-            <div class="disclaimer-alert">
-                <span class="disclaimer-icon">⚠️</span>
-                <p id="disclaimer-text">
-                    Este diagnóstico es una herramienta técnica de auditoría académica basada en la legislación chilena (Ley N° 19.628). No constituye una certificación ni dictamen jurídico vinculante.
-                </p>
-            </div>
-        </div>
-
-        <!-- Bookmarklet Section -->
-        <section id="bookmarklet-section" class="bookmarklet-card">
-            <div class="bookmarklet-header">
-                <h2>🖱️ Botón de Prueba Rápida en Navegador (Bookmarklet)</h2>
-                <p>Arrastra el siguiente botón a tu barra de marcadores del navegador para auditar la página que estés visitando con 1 solo clic:</p>
-            </div>
-            <div class="bookmarklet-actions">
-                <a id="bookmarklet-link" href="#" class="bookmarklet-button">🔍 Auditar Sitio Actual</a>
-                <span class="drag-hint">← Arrastra este botón a tus marcadores</span>
             </div>
         </section>
 
-        <!-- Normativa Section -->
-        <section id="normativa-section" class="normativa-card">
-            <h2>⚖️ Marco Normativo Auditable (Chile)</h2>
-            <div class="normativa-grid">
-                <div class="norm-item">
-                    <h4>1. Existencia de Política de Privacidad</h4>
-                    <p>Acceso directo desde el footer, HTTP 200 y presencia de cláusulas informativas de finalidades y responsable del tratamiento.</p>
+        <!-- Bookmarklet -->
+        <section id="marcador" class="section">
+            <div class="bookmarklet">
+                <div>
+                    <h2>Revisa la página que estás viendo</h2>
+                    <p>Arrastra el botón a tu barra de marcadores. Cuando estés en cualquier sitio, haz clic en él y se abrirá DataCheck con la revisión lista.</p>
                 </div>
-                <div class="norm-item">
-                    <h4>2. Canales para Derechos ARCO</h4>
-                    <p>Disponibilidad de canales visibles (correo o formulario) para ejercer Acceso, Rectificación, Cancelación u Oposición.</p>
-                </div>
-                <div class="norm-item">
-                    <h4>3. Bloqueo Previo de Rastreadores</h4>
-                    <p>Ningún script o cookie de terceros (Google Analytics, Facebook Pixel, etc.) debe inyectarse antes de la autorización explícita.</p>
-                </div>
+                <a id="bookmarklet-link" href="#" class="bookmarklet-btn">
+                    <svg class="icon" width="18" height="18"><use href="#i-bookmark"/></svg>
+                    Auditar sitio actual
+                </a>
             </div>
         </section>
     </main>
 
-    <footer class="app-footer">
-        <div class="container">
-            <p>© 2026 <strong>DataCheck.cl</strong> - Plataforma de Auditoría | Taller de Desarrollo de Software (Sofía Díaz - Benjamín Rodriguez - Franco Vela - Benjamín Vidal)</p>
+    <footer class="site-footer">
+        <div class="wrap">
+            <p class="footer-title">DataCheck.cl</p>
+            <p>Taller de Desarrollo de Software: Sofía Díaz, Benjamín Rodriguez, Franco Vela y Benjamín Vidal.</p>
         </div>
     </footer>
 
-    <script src="app.js?v=2.1"></script>
+    <script src="app.js?v=2.3"></script>
 </body>
 </html>
