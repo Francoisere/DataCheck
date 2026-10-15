@@ -9,16 +9,20 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from src.api.routes import scan, health, reports
+from src.api.routes import scan, health, reports, schedules
 from src.db.session import init_db
+from src.core.scheduler import start_scheduler, shutdown_scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Inicializar tablas en base de datos al arrancar
     await init_db()
+    # Iniciar scheduler en segundo plano para re-auditorías automáticas
+    start_scheduler()
     yield
-    # Limpieza al apagar si fuera necesario
+    # Limpieza al apagar
+    shutdown_scheduler()
 
 
 app = FastAPI(
@@ -44,6 +48,8 @@ app.add_middleware(
 app.include_router(scan.router)
 app.include_router(health.router)
 app.include_router(reports.router)
+app.include_router(schedules.router)
+
 
 # Montar interfaz web estática en la raíz "/"
 ui_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "ui")

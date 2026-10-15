@@ -13,9 +13,18 @@ services:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres_pass@db:5432/privacy_audit
       - SCAN_TIMEOUT_SECONDS=25.0
       - SCAN_PAGE_TIMEOUT_MS=15000
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_FROM_EMAIL=${SMTP_FROM_EMAIL:-alertas@datacheck.cl}
+      - SMTP_TLS=${SMTP_TLS:-false}
+      - SCHEDULER_CHECK_INTERVAL_SECONDS=30
     depends_on:
       db:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
       interval: 15s
@@ -23,6 +32,7 @@ services:
       retries: 3
       start_period: 10s
     restart: unless-stopped
+
 
   db:
     image: postgres:16-alpine
@@ -42,5 +52,14 @@ services:
       retries: 5
     restart: unless-stopped
 
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: datacheck_mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+

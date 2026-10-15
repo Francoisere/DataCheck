@@ -19,6 +19,17 @@ class Settings(BaseSettings):
     # Nivel B: interacción con banner (desactivado por defecto, requiere revisión DA-01)
     ENABLE_BANNER_INTERACTION: bool = False
 
+    # Configuración de Servidor de Correo (SMTP)
+    SMTP_HOST: str = "localhost"
+    SMTP_PORT: int = 1025
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = "alertas@datacheck.cl"
+    SMTP_TLS: bool = False
+
+    # Intervalo de sondeo del scheduler en segundos (default: cada 30 segundos)
+    SCHEDULER_CHECK_INTERVAL_SECONDS: int = 30
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

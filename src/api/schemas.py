@@ -71,3 +71,25 @@ class ScanResponse(BaseModel):
     legal_disclaimer: str = Field(..., description="Aviso legal de descargo de responsabilidad académica")
     pdf_report_url: Optional[str] = Field(None, description="Enlace para descargar el informe oficial en PDF")
 
+
+class ScheduleCreateRequest(BaseModel):
+    audit_id: str = Field(..., description="UUID de la auditoría reprobada previa")
+    email: str = Field(..., description="Correo electrónico para recibir los resultados")
+    interval_mode: str = Field(
+        default="DEMO_2_MIN",
+        description="Modo de intervalo: 'DEMO_2_MIN' (2 minutos para demostración) o 'PROD_15_DAYS' (15 días)"
+    )
+
+
+class ScheduleResponse(BaseModel):
+    schedule_id: str = Field(..., description="UUID de la tarea programada")
+    target_url: str = Field(..., description="URL que será re-auditada")
+    email: str = Field(..., description="Correo destinatario")
+    scheduled_at: str = Field(..., description="Fecha y hora ISO de próxima ejecución")
+    status: str = Field(..., description="Estado de la tarea (PENDIENTE, etc.)")
+    message: str = Field(..., description="Mensaje informativo para el usuario")
+    executed_at: Optional[str] = Field(None, description="Fecha y hora ISO de ejecución")
+    nueva_auditoria_id: Optional[str] = Field(None, description="UUID de la nueva auditoría ejecutada")
+
+
+
