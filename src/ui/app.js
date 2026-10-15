@@ -222,9 +222,84 @@ document.addEventListener("DOMContentLoaded", () => {
         clearInterval(progressTimer);
     }
 
+    /* ---------- Escaneo de flujo multietapa ---------- */
+
+    async function scanFlow(target) {
+        errorBox.hidden = true;
+        results.hidden = true;
+        loading.hidden = false;
+        setBusy(true);
+
+        const FLOW_STEPS = [
+            "Iniciando auditoría de flujo multietapa (Nivel 0 pasivo)...",
+            "Cargando página de inicio y descubriendo catálogo...",
+            "Buscando enlaces de registro y cuenta de usuario...",
+            "Localizando carrito o checkout dentro del mismo dominio...",
+            "Verificando pasarelas de pago y cookies acumuladas...",
+            "Consolidando inventario de rastreadores por etapa...",
+        ];
+        let step = 0;
+        loadingStep.textContent = FLOW_STEPS[0];
+        progressFill.style.width = "10%";
+        clearInterval(progressTimer);
+        progressTimer = setInterval(() => {
+            step = Math.min(step + 1, FLOW_STEPS.length - 1);
+            loadingStep.textContent = FLOW_STEPS[step];
+            progressFill.style.width = `${Math.min(95, 10 + step * 15)}%`;
+        }, 3000);
+
+        const t0 = performance.now();
+
+        try {
+            const initRes = await fetch("/api/v1/flow-audit", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ url: target }),
+            });
+            if (!initRes.ok) {
+                const err = await initRes.json().catch(() => ({ detail: initRes.statusText }));
+                throw new Error(err.detail || "Error al iniciar auditoría de flujo.");
+            }
+            const { job_id } = await initRes.json();
+
+            let attempts = 0;
+            const maxAttempts = 60;
+            let completedResult = null;
+
+            while (attempts < maxAttempts) {
+                await new Promise((r) => setTimeout(r, 2000));
+                attempts++;
+                const pollRes = await fetch(`/api/v1/flow-audit/${job_id}`);
+                if (!pollRes.ok) continue;
+                const pollData = await pollRes.json();
+                if (pollData.status === "completed") {
+                    completedResult = pollData.result;
+                    break;
+                } else if (pollData.status === "error") {
+                    throw new Error(pollData.error || "Ocurrió un error en el recorrido del flujo.");
+                }
+            }
+
+            if (!completedResult) {
+                throw new Error("Tiempo de espera agotado al auditar el flujo.");
+            }
+
+            stopProgress();
+            loading.hidden = true;
+            setBusy(false);
+            renderFlowResults(completedResult, performance.now() - t0);
+        } catch (e) {
+            stopProgress();
+            loading.hidden = true;
+            setBusy(false);
+            errorMessage.textContent = e.message || "Error al auditar el flujo.";
+            errorBox.hidden = false;
+        }
+    }
+
     /* ---------- Escaneo ---------- */
 
-    async function scan(raw) {
+    async function scan(raw, forceNormal = false) {
         if (scanning) return;
         const parsed = parseTarget(raw);
         if (parsed.error) {
@@ -347,7 +422,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     /* ---------- Render del informe de flujo multietapa ---------- */
 
-    function renderFlowResults(data) {
+    function renderFlowResults(data, elapsedMs) {
         const flowSec = $("flow-section");
         if (flowSec) flowSec.hidden = false;
         lastReport = data;
@@ -355,10 +430,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const tone = toneOf(data.flow_verdict);
         $("verdict-band").className = `verdict tone-${tone}`;
-        $("report-url").textContent = data.target_url || "";
+        showSiteInfo(data.target_url, elapsedMs);
         $("verdict-title").textContent = `Flujo: ${prettify(data.flow_verdict)}`;
         $("verdict-summary").textContent = data.flow_verdict_summary || "";
-        $("score-value").textContent = data.flow_verdict === "CUMPLE" ? 100 : (data.flow_verdict === "NO_VERIFICABLE" ? 50 : 0);
         $("report-date").textContent = "Auditoría de flujo completada el " + new Date().toLocaleString("es-CL", { dateStyle: "long", timeStyle: "short" });
 
         // Ocultar pilares estándar en la vista de flujo
@@ -459,6 +533,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
         results.hidden = false;
         results.scrollIntoView({ behavior: "smooth", block: "start" });
+        const flowScore = data.flow_verdict === "CUMPLE" ? 100 : (data.flow_verdict === "NO_VERIFICABLE" ? 50 : 0);
+        animateGauge(flowScore);
     }
 
     /* ---------- Descarga del informe en PDF (servicio del backend) ---------- */
