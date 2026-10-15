@@ -20,6 +20,7 @@ from src.core.sanitizer import sanitize_url
 from .trackers_db import (
     KNOWN_TRACKER_DOMAINS,
     KNOWN_TRACKER_COOKIES,
+    is_tracker_cookie,
     MANDATORY_LEGAL_KEYWORDS,
     ARCO_KEYWORDS
 )
@@ -35,6 +36,20 @@ PRIVACY_LINK_PATTERNS = [
 ]
 
 EMAIL_REGEX = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+
+
+class TrafficCapture:
+    """Clase reutilizable para captura pasiva de solicitudes de red y dominios de rastreo."""
+    def __init__(self):
+        self.captured_requests: List[str] = []
+        self.detected_tracker_domains: List[str] = []
+
+    def handle_request(self, request) -> None:
+        url = request.url
+        self.captured_requests.append(url)
+        for domain in KNOWN_TRACKER_DOMAINS:
+            if domain in url and domain not in self.detected_tracker_domains:
+                self.detected_tracker_domains.append(domain)
 
 
 class WebInspector:
@@ -66,8 +81,7 @@ class WebInspector:
         """
         normalized_url, _ = sanitize_url(raw_url)
 
-        captured_requests: List[str] = []
-        detected_tracker_domains: List[str] = []
+        traffic_capture = TrafficCapture()
 
         async with async_playwright() as p:
             browser = await p.chromium.launch(
@@ -95,14 +109,7 @@ class WebInspector:
                 page: Page = await context.new_page()
 
                 # Listener pasivo de tráfico de red
-                def handle_request(request):
-                    url = request.url
-                    captured_requests.append(url)
-                    for domain in KNOWN_TRACKER_DOMAINS:
-                        if domain in url and domain not in detected_tracker_domains:
-                            detected_tracker_domains.append(domain)
-
-                page.on("request", handle_request)
+                page.on("request", traffic_capture.handle_request)
 
                 page_load_status = 200
                 error_message = None
@@ -135,12 +142,14 @@ class WebInspector:
                 # Pausa breve para capturar scripts asíncronos iniciales
                 await asyncio.sleep(1.5)
 
-                # Cookies depositadas pre-interacción
+                # Cookies depositadas pre-interacción (filtrado exacto y por prefijo sin falsos positivos)
                 cookies = await context.cookies()
                 raw_cookies = [c["name"] for c in cookies]
                 detected_tracker_cookies = [
-                    name for name in raw_cookies if any(tk in name for tk in KNOWN_TRACKER_COOKIES)
+                    name for name in raw_cookies if is_tracker_cookie(name)
                 ]
+                captured_requests = traffic_capture.captured_requests
+                detected_tracker_domains = traffic_capture.detected_tracker_domains
 
                 # LocalStorage
                 local_storage_keys = []

@@ -236,6 +236,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const target = parsed.url;
         urlInput.value = target;
 
+        const flowChecked = $("flow-checkbox") && $("flow-checkbox").checked;
+        if (flowChecked && !forceNormal) {
+            return scanFlow(target);
+        }
+
         errorBox.hidden = true;
         results.hidden = true;
         loading.hidden = false;
@@ -273,12 +278,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    /* ---------- Render del informe ---------- */
+    /* ---------- Render del informe estándar ---------- */
 
     function renderResults(data, elapsedMs) {
         const tone = toneOf(data.verdict);
         lastReport = data;
         pdfError.hidden = true;
+
+        const flowSec = $("flow-section");
+        if (flowSec) flowSec.hidden = true;
 
         $("verdict-band").className = `verdict tone-${tone}`;
         showSiteInfo(data.target_url, elapsedMs);
@@ -335,6 +343,122 @@ document.addEventListener("DOMContentLoaded", () => {
         results.hidden = false;
         results.scrollIntoView({ behavior: "smooth", block: "start" });
         animateGauge(data.score);
+    }
+
+    /* ---------- Render del informe de flujo multietapa ---------- */
+
+    function renderFlowResults(data) {
+        const flowSec = $("flow-section");
+        if (flowSec) flowSec.hidden = false;
+        lastReport = data;
+        pdfError.hidden = true;
+
+        const tone = toneOf(data.flow_verdict);
+        $("verdict-band").className = `verdict tone-${tone}`;
+        $("report-url").textContent = data.target_url || "";
+        $("verdict-title").textContent = `Flujo: ${prettify(data.flow_verdict)}`;
+        $("verdict-summary").textContent = data.flow_verdict_summary || "";
+        $("score-value").textContent = data.flow_verdict === "CUMPLE" ? 100 : (data.flow_verdict === "NO_VERIFICABLE" ? 50 : 0);
+        $("report-date").textContent = "Auditoría de flujo completada el " + new Date().toLocaleString("es-CL", { dateStyle: "long", timeStyle: "short" });
+
+        // Ocultar pilares estándar en la vista de flujo
+        $("pilares").innerHTML = "";
+
+        const badge = $("flow-verdict-badge");
+        if (badge) {
+            badge.className = `badge tone-${tone}`;
+            badge.textContent = prettify(data.flow_verdict);
+        }
+
+        const summaryText = $("flow-summary-text");
+        if (summaryText) {
+            summaryText.textContent = data.flow_verdict_summary || "";
+        }
+
+        const timeline = $("flow-timeline");
+        if (timeline) {
+            if (!data.flow_detected) {
+                timeline.innerHTML = `
+                    <div class="flow-stage-card tone-warn">
+                        <div class="flow-stage-header">
+                            <span class="flow-stage-title">Flujo de compra/registro no detectado</span>
+                        </div>
+                        <p class="flow-stage-url">${esc(data.flow_not_detected_reason || "No se identificaron enlaces al catálogo, registro o carrito en el mismo dominio.")}</p>
+                        <p class="muted" style="margin-top:8px;">Puedes ejecutar el análisis estándar para revisar la política de privacidad, canales ARCO y cookies pre-consentimiento.</p>
+                        <button type="button" id="btn-fallback-scan" class="btn-primary" style="margin-top:14px;height:42px;font-size:14px;padding:0 20px;">
+                            ${icon("i-search", 16)} Ejecutar auditoría estándar
+                        </button>
+                    </div>
+                `;
+                const fbBtn = $("btn-fallback-scan");
+                if (fbBtn) {
+                    fbBtn.onclick = () => scan(data.target_url, true);
+                }
+            } else {
+                timeline.innerHTML = (data.stages_evaluated || []).map((s, idx) => {
+                    const sTone = toneOf(s.verdict);
+                    const domPills = (s.new_tracker_domains || []).map(d => `<span class="flow-pill pill-domain">🌐 ${esc(d)}</span>`).join("");
+                    const ckPills = (s.new_tracker_cookies || []).map(c => `<span class="flow-pill pill-cookie">🍪 ${esc(c)}</span>`).join("");
+                    const note = s.verification_note ? `<p class="flow-note">${esc(s.verification_note)}</p>` : "";
+                    return `
+                        <div class="flow-stage-card tone-${sTone}">
+                            <div class="flow-stage-header">
+                                <span class="flow-stage-title">Etapa ${idx + 1}: ${esc(s.stage_label || s.stage_name)}</span>
+                                <span class="badge tone-${sTone}">${esc(prettify(s.verdict))}</span>
+                            </div>
+                            <p class="flow-stage-url"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a></p>
+                            <div class="flow-stage-meta">
+                                ${domPills || ckPills ? `<span><b>Nuevos rastreadores:</b></span> ${domPills} ${ckPills}` : `<span class="muted">Sin nuevos rastreadores detectados en esta etapa</span>`}
+                            </div>
+                            ${note}
+                        </div>
+                    `;
+                }).join("");
+            }
+        }
+
+        const limitDiv = $("flow-limitations");
+        if (limitDiv) {
+            if (data.limitations && data.limitations.length) {
+                limitDiv.innerHTML = `
+                    <b>Limitaciones declaradas (Nivel 0 pasivo):</b>
+                    <ul>${data.limitations.map(l => `<li>${esc(l)}</li>`).join("")}</ul>
+                `;
+            } else {
+                limitDiv.innerHTML = "";
+            }
+        }
+
+        const list = $("findings-list");
+        if (data.flow_findings && data.flow_findings.length) {
+            list.innerHTML = data.flow_findings.map((f) => {
+                const t = FINDING_TONE[f.status] || "info";
+                const ticket = f.remediation_ticket
+                    ? `<div class="ticket">
+                           <div class="ticket-head">
+                               <p class="ticket-title">${icon("i-wrench", 16)}Cómo corregirlo (${esc(f.stage_label)})</p>
+                               ${f.technical_raw ? `<code>${esc(f.technical_raw)}</code>` : ""}
+                           </div>
+                           <p>${esc(f.remediation_ticket)}</p>
+                       </div>`
+                    : "";
+                return `
+                    <li class="finding tone-${t}">
+                        ${icon(TONE_ICON[t], 22)}
+                        <div class="finding-body">
+                            <p class="finding-pilar">Etapa: ${esc(f.stage_label)}</p>
+                            <h4>${esc(f.title)}</h4>
+                            <p class="finding-detail">${esc(f.detail)}</p>
+                            ${ticket}
+                        </div>
+                    </li>`;
+            }).join("");
+        } else {
+            list.innerHTML = '<li class="finding"><p class="muted">No se registraron hallazgos adicionales en el flujo.</p></li>';
+        }
+
+        results.hidden = false;
+        results.scrollIntoView({ behavior: "smooth", block: "start" });
     }
 
     /* ---------- Descarga del informe en PDF (servicio del backend) ---------- */

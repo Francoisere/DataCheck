@@ -56,6 +56,52 @@ class FramesAudit(BaseModel):
     cmp_frames: List[FrameInfo] = Field(default_factory=list, description="Frames de CMPs de consentimiento detectados")
 
 
+# --- Esquemas para Auditoría de Flujo Multietapa (C-05) ---
+
+class FlowScanRequest(BaseModel):
+    """Solicitud de auditoría de flujo de compra/registro."""
+    url: str = Field(
+        ...,
+        examples=["https://tienda-ejemplo.cl"],
+        description="URL del sitio web cuyo flujo de compra/registro se auditará"
+    )
+
+
+class FlowStageFinding(BaseModel):
+    """Hallazgo específico de una etapa del flujo."""
+    stage: str = Field(..., description="Nombre de la etapa (inicio, catalogo, registro, carrito)")
+    stage_label: str = Field(..., description="Etiqueta legible de la etapa")
+    status: str = Field(..., description="Severidad: OK | WARNING | FAIL")
+    title: str = Field(..., description="Título del hallazgo")
+    detail: str = Field(..., description="Detalle técnico (máx. 300 caracteres)")
+    technical_raw: Optional[str] = Field(None, description="Dato técnico crudo")
+    remediation_ticket: str = Field(..., description="Recomendación accionable")
+
+
+class FlowStageResult(BaseModel):
+    """Resultado evaluado de una etapa individual del flujo."""
+    stage_name: str = Field(..., description="Nombre de la etapa")
+    stage_label: str = Field(..., description="Etiqueta legible")
+    url: str = Field(..., description="URL visitada en la etapa")
+    verdict: str = Field(..., description="CUMPLE | NO_CUMPLE | NO_VERIFICABLE | NO_ALCANZADA")
+    new_tracker_domains: List[str] = Field(default_factory=list, description="Dominios de rastreo nuevos en esta etapa")
+    new_tracker_cookies: List[str] = Field(default_factory=list, description="Cookies de rastreo nuevas en esta etapa")
+
+
+class FlowAuditResponse(BaseModel):
+    """Respuesta de auditoría de flujo multietapa (C-05)."""
+    target_url: str = Field(..., description="URL auditada")
+    flow_detected: bool = Field(..., description="Si se detectó un flujo de compra/registro")
+    flow_not_detected_reason: Optional[str] = Field(None, description="Razón si no se detectó flujo")
+    flow_verdict: str = Field(..., description="CUMPLE | NO_CUMPLE | NO_VERIFICABLE | NO_APLICABLE")
+    flow_verdict_summary: str = Field(..., description="Resumen ejecutivo del dictamen del flujo")
+    total_stages_evaluated: int = Field(0, description="Número de etapas evaluadas")
+    stages_evaluated: List[FlowStageResult] = Field(default_factory=list, description="Resultados por etapa")
+    flow_findings: List[FlowStageFinding] = Field(default_factory=list, description="Hallazgos del flujo")
+    limitations: List[str] = Field(default_factory=list, description="Limitaciones declaradas de la inspección")
+    legal_disclaimer: str = Field(..., description="Descargo de responsabilidad")
+
+
 class ScanResponse(BaseModel):
     audit_id: Optional[str] = Field(None, description="Identificador único UUID de la auditoría en PostgreSQL")
     target_url: str = Field(..., description="URL normalizada y auditada")

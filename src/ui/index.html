@@ -79,6 +79,13 @@
             </form>
             <p id="url-error" class="field-error" role="alert" hidden></p>
 
+            <div class="flow-option">
+                <label class="flow-toggle" for="flow-checkbox">
+                    <input type="checkbox" id="flow-checkbox">
+                    <span>Auditar flujo de compra/registro (catálogo → registro → carrito)</span>
+                </label>
+            </div>
+
             <p class="examples">
                 Prueba con
                 <button type="button" class="link-btn" data-url="gob.cl">gob.cl</button>,
@@ -134,6 +141,16 @@
                 </div>
 
                 <div id="pilares" class="pilares"></div>
+
+                <div id="flow-section" class="flow-section" hidden>
+                    <div class="flow-head">
+                        <h3>Mapa de Navegación del Flujo</h3>
+                        <span id="flow-verdict-badge" class="badge"></span>
+                    </div>
+                    <p id="flow-summary-text" class="flow-summary-text"></p>
+                    <div id="flow-timeline" class="flow-timeline"></div>
+                    <div id="flow-limitations" class="flow-limitations"></div>
+                </div>
 
                 <div class="findings">
                     <div class="findings-head">
