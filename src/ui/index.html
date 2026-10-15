@@ -19,7 +19,7 @@
             } catch (e) {}
         })();
     </script>
-    <link rel="stylesheet" href="style.css?v=2.3">
+    <link rel="stylesheet" href="style.css?v=2.5">
 </head>
 <body>
     <!-- Íconos (estilo Lucide) -->
@@ -39,6 +39,9 @@
         <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
         <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
         <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+        <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+        <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+        <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
     </svg>
 
     <header class="site-header">
@@ -74,6 +77,7 @@
                     <span id="btn-label">Revisar sitio</span>
                 </button>
             </form>
+            <p id="url-error" class="field-error" role="alert" hidden></p>
 
             <div class="flow-option">
                 <label class="flow-toggle" for="flow-checkbox">
@@ -110,11 +114,30 @@
             <article class="report">
                 <div id="verdict-band" class="verdict">
                     <div class="verdict-text">
-                        <p id="report-url" class="report-url"></p>
+                        <div class="report-site">
+                            <span class="site-icon">
+                                <img id="site-favicon" alt="" width="18" height="18" referrerpolicy="no-referrer" hidden>
+                                <svg id="site-fallback" class="icon" width="16" height="16" aria-hidden="true"><use href="#i-globe"/></svg>
+                            </span>
+                            <a id="report-url" class="report-url" href="#" target="_blank" rel="noopener noreferrer">
+                                <span id="report-url-text"></span>
+                                <svg class="icon" width="14" height="14" aria-hidden="true"><use href="#i-external"/></svg>
+                            </a>
+                            <span id="scan-meta" class="report-meta" hidden>
+                                <svg class="icon" width="14" height="14" aria-hidden="true"><use href="#i-clock"/></svg>
+                                <span id="scan-time"></span>
+                            </span>
+                        </div>
                         <h2 id="verdict-title"></h2>
                         <p id="verdict-summary" class="verdict-summary"></p>
                     </div>
-                    <p class="score"><span id="score-value"></span><span class="score-of">de 100</span></p>
+                    <div id="gauge" class="gauge" role="img" aria-label="Puntaje de cumplimiento">
+                        <svg viewBox="0 0 120 120" aria-hidden="true">
+                            <circle class="gauge-track" cx="60" cy="60" r="52"/>
+                            <circle id="gauge-arc" class="gauge-arc" cx="60" cy="60" r="52"/>
+                        </svg>
+                        <p class="gauge-label"><span id="score-value">0</span><span class="score-of">de 100</span></p>
+                    </div>
                 </div>
 
                 <div id="pilares" class="pilares"></div>
@@ -195,11 +218,40 @@
 
     <footer class="site-footer">
         <div class="wrap">
-            <p class="footer-title">DataCheck.cl</p>
-            <p>Taller de Desarrollo de Software: Sofía Díaz, Benjamín Rodriguez, Franco Vela y Benjamín Vidal.</p>
+            <div class="footer-grid">
+                <div class="footer-brand">
+                    <a href="#inicio" class="brand">
+                        <span class="brand-mark"><svg class="icon" width="18" height="18"><use href="#i-shield"/></svg></span>
+                        <span class="brand-name">DataCheck.cl</span>
+                    </a>
+                    <p>Auditoría pasiva de cumplimiento de datos personales para sitios web chilenos. Solo se realizan solicitudes HTTP GET a información pública.</p>
+                </div>
+                <nav class="footer-col" aria-label="Producto">
+                    <h3>Producto</h3>
+                    <a href="#inicio">Escáner</a>
+                    <a href="#criterios">Qué se revisa</a>
+                    <a href="#marcador">Botón del navegador</a>
+                </nav>
+                <div class="footer-col">
+                    <h3>Marco normativo</h3>
+                    <p>Ley N° 19.628</p>
+                    <p>Ley N° 21.719</p>
+                </div>
+                <div class="footer-col">
+                    <h3>Equipo</h3>
+                    <p>Sofía Díaz</p>
+                    <p>Benjamín Rodríguez</p>
+                    <p>Franco Vela</p>
+                    <p>Benjamín Vidal</p>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>© 2026 DataCheck.cl. Proyecto académico, Taller de Desarrollo de Software, Universidad Católica del Maule.</p>
+                <p>Herramienta técnica de diagnóstico: no constituye certificación ni dictamen jurídico.</p>
+            </div>
         </div>
     </footer>
 
-    <script src="app.js?v=2.3"></script>
+    <script src="app.js?v=2.5"></script>
 </body>
 </html>
