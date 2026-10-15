@@ -203,8 +203,47 @@ class PdfReportService:
         story.append(t_pilares)
         story.append(Spacer(1, 10))
 
+        # SECCIÓN DE FLUJO MULTIETAPA (si existe información de flujo en la auditoría)
+        stages = audit_data.get("stages_evaluated") or audit_data.get("stages") or []
+        if stages or audit_data.get("flow_verdict"):
+            story.append(Paragraph("2. Mapa de Navegación del Flujo de Compra/Registro (Nivel 0)", h2_style))
+            flow_verdict = audit_data.get("flow_verdict", "NO_APLICABLE")
+            flow_summary = audit_data.get("flow_verdict_summary", "")
+            story.append(Paragraph(f"<b>Dictamen del Flujo:</b> {escape(str(flow_verdict))} - {escape(str(flow_summary))}", body_style))
+            story.append(Spacer(1, 6))
+
+            flow_table_data = [
+                ["Etapa", "URL", "Veredicto", "Rastreadores Nuevos", "Cookies Nuevas"]
+            ]
+            for s in stages:
+                doms = ", ".join(s.get("new_tracker_domains", [])) or "Ninguno"
+                cookies = ", ".join(s.get("new_tracker_cookies", [])) or "Ninguna"
+                flow_table_data.append([
+                    Paragraph(escape(str(s.get("stage_label", s.get("stage_name", "")))), body_style),
+                    Paragraph(f"<font size='7'>{escape(str(s.get('url', '')))}</font>", body_style),
+                    Paragraph(f"<b>{escape(str(s.get('verdict', '')))}</b>", body_style),
+                    Paragraph(escape(doms), body_style),
+                    Paragraph(escape(cookies), body_style),
+                ])
+
+            t_flow = Table(flow_table_data, colWidths=[90, 160, 70, 110, 110])
+            t_flow.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 7),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]))
+            story.append(t_flow)
+            story.append(Spacer(1, 10))
+
         # 4. DESGLOSE DETALLADO DE HALLAZGOS Y SUSTENTO JURÍDICO
-        story.append(Paragraph("2. Desglose de Hallazgos Empíricos, Sustento Legal y Tickets de Remediación", h2_style))
+        findings_sec_title = "3. Desglose de Hallazgos Empíricos, Sustento Legal y Tickets de Remediación" if stages else "2. Desglose de Hallazgos Empíricos, Sustento Legal y Tickets de Remediación"
+        story.append(Paragraph(findings_sec_title, h2_style))
 
         findings = audit_data.get("findings", [])
         if not findings:

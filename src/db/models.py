@@ -17,6 +17,7 @@ from sqlalchemy import (
     Integer,
     Text,
     DateTime,
+    Boolean,
     ForeignKey,
     UniqueConstraint
 )
@@ -130,3 +131,56 @@ class EvidenciaRastreador(Base):
 
     # Relaciones
     auditoria: Mapped["Auditoria"] = relationship("Auditoria", back_populates="evidencias_rastreadores")
+
+
+class EtapaFlujo(Base):
+    """Registro de una etapa individual en un flujo de compra/registro auditado."""
+    __tablename__ = "etapas_flujo"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    auditoria_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("auditorias.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    nombre_etapa: Mapped[str] = mapped_column(String(50), nullable=False)
+    etiqueta: Mapped[str] = mapped_column(String(100), nullable=False)
+    url: Mapped[str] = mapped_column(String(500), nullable=False)
+    orden: Mapped[int] = mapped_column(Integer, nullable=False)
+    veredicto: Mapped[str] = mapped_column(
+        String(30), nullable=False
+    )  # CUMPLE | NO_CUMPLE | NO_VERIFICABLE | NO_ALCANZADA
+    http_status: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    requests_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Relaciones
+    auditoria: Mapped["Auditoria"] = relationship("Auditoria", backref="etapas_flujo")
+    evidencias: Mapped[List["EvidenciaEtapa"]] = relationship(
+        "EvidenciaEtapa", back_populates="etapa", cascade="all, delete-orphan"
+    )
+
+
+class EvidenciaEtapa(Base):
+    """Evidencia de rastreo encontrada en una etapa del flujo (dominio o cookie nueva)."""
+    __tablename__ = "evidencias_etapa"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    etapa_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("etapas_flujo.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    tipo: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # DOMINIO_NUEVO | COOKIE_NUEVA
+    valor: Mapped[str] = mapped_column(
+        String(255), nullable=False
+    )  # Solo nombre de dominio o cookie, nunca valores (DA-04)
+    es_nuevo_en_etapa: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )
+
+    # Relaciones
+    etapa: Mapped["EtapaFlujo"] = relationship("EtapaFlujo", back_populates="evidencias")
