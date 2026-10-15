@@ -13,6 +13,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const errorMessage = $("error-message");
     const results = $("results");
     const examples = document.querySelectorAll(".link-btn");
+    const urlError = $("url-error");
 
     const STEPS = [
         "Abriendo el sitio en un navegador sin interfaz...",
@@ -52,6 +53,132 @@ document.addEventListener("DOMContentLoaded", () => {
         if (v.includes("aprob") || v.includes("cumple") || v === "ok") return "ok";
         if (v.includes("rech") || v.includes("falla") || v.includes("fail")) return "fail";
         return "warn";
+    }
+
+    /* ---------- Validación de la dirección ---------- */
+
+    const DOMAIN_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,61}$/;
+    const IPV4_RE = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+    const FORMAT_MSG = "URL inaccesible o formato no válido. Escribe un dominio como ejemplo.cl, sin espacios.";
+
+    function parseTarget(raw) {
+        const text = (raw || "").trim();
+        if (!text) return { error: "Escribe la dirección de un sitio web." };
+        if (/\s/.test(text)) return { error: FORMAT_MSG };
+
+        const proto = text.match(/^([a-z][a-z0-9+.-]*):\/\//i);
+        if (proto && !/^https?$/i.test(proto[1])) {
+            return { error: "URL inaccesible o formato no válido. Solo se aceptan direcciones http:// o https://." };
+        }
+
+        const withProto = proto ? text : "https://" + text;
+        let host;
+        try {
+            host = new URL(withProto).hostname;
+        } catch (e) {
+            return { error: FORMAT_MSG };
+        }
+        // localhost y direcciones IP se aceptan para poder probar sitios locales
+        if (!(DOMAIN_RE.test(host) || host === "localhost" || IPV4_RE.test(host))) {
+            return { error: FORMAT_MSG };
+        }
+        return { url: withProto };
+    }
+
+    function showFieldError(message) {
+        urlError.textContent = message;
+        urlError.hidden = false;
+        urlInput.setAttribute("aria-invalid", "true");
+        urlInput.setAttribute("aria-describedby", "url-error");
+        urlInput.focus();
+    }
+
+    function clearFieldError() {
+        urlError.hidden = true;
+        urlInput.removeAttribute("aria-invalid");
+        urlInput.removeAttribute("aria-describedby");
+    }
+
+    /* ---------- Datos del sitio auditado ---------- */
+
+    function showSiteInfo(targetUrl, elapsedMs) {
+        const link = $("report-url");
+        const img = $("site-favicon");
+        const fallback = $("site-fallback");
+        const meta = $("scan-meta");
+
+        $("report-url-text").textContent = targetUrl || "";
+
+        // Solo se enlaza si es una dirección http(s) válida
+        let origin = "";
+        try {
+            const u = new URL(targetUrl);
+            if (u.protocol === "http:" || u.protocol === "https:") origin = u.origin;
+        } catch (e) {}
+        if (origin) link.setAttribute("href", targetUrl);
+        else link.removeAttribute("href");
+
+        // Ícono: se pide directamente al sitio auditado, sin servicios de terceros
+        img.toggleAttribute("hidden", true);
+        fallback.toggleAttribute("hidden", false);
+        if (origin) {
+            img.onload = () => {
+                img.toggleAttribute("hidden", false);
+                fallback.toggleAttribute("hidden", true);
+            };
+            img.onerror = () => {
+                img.toggleAttribute("hidden", true);
+                fallback.toggleAttribute("hidden", false);
+            };
+            img.src = origin + "/favicon.ico";
+        }
+
+        const ok = Number.isFinite(elapsedMs);
+        meta.toggleAttribute("hidden", !ok);
+        if (ok) {
+            const secs = (elapsedMs / 1000).toLocaleString("es-CL", {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+            });
+            $("scan-time").textContent = `Revisado en ${secs} s`;
+        }
+    }
+
+    /* ---------- Anillo de puntaje ---------- */
+
+    const GAUGE_LEN = 2 * Math.PI * 52; // circunferencia del anillo (r = 52)
+    let gaugeRun = 0;
+
+    function animateGauge(score) {
+        const value = Math.max(0, Math.min(100, Number(score) || 0));
+        const arc = $("gauge-arc");
+        const label = $("score-value");
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const run = ++gaugeRun;
+
+        $("gauge").setAttribute("aria-label", `Puntaje de cumplimiento: ${value} de 100`);
+        arc.style.strokeDasharray = GAUGE_LEN;
+        arc.style.transition = "none";
+        arc.style.strokeDashoffset = GAUGE_LEN;
+        label.textContent = reduce ? value : 0;
+
+        // Doble requestAnimationFrame: asegura que el navegador pinte el anillo vacío antes de llenarlo
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            if (run !== gaugeRun) return;
+            arc.style.transition = "";
+            arc.style.strokeDashoffset = GAUGE_LEN * (1 - value / 100);
+            if (reduce) return;
+
+            const start = performance.now();
+            const duration = 1100;
+            const tick = (now) => {
+                if (run !== gaugeRun) return;
+                const p = Math.min(1, (now - start) / duration);
+                label.textContent = Math.round(value * (1 - Math.pow(1 - p, 3)));
+                if (p < 1) requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+        }));
     }
 
     function pilarName(raw) {
@@ -98,9 +225,15 @@ document.addEventListener("DOMContentLoaded", () => {
     /* ---------- Escaneo ---------- */
 
     async function scan(raw) {
-        let target = (raw || "").trim();
-        if (!target || scanning) return;
-        if (!/^https?:\/\//i.test(target)) target = "https://" + target;
+        if (scanning) return;
+        const parsed = parseTarget(raw);
+        if (parsed.error) {
+            errorBox.hidden = true;
+            showFieldError(parsed.error);
+            return;
+        }
+        clearFieldError();
+        const target = parsed.url;
         urlInput.value = target;
 
         errorBox.hidden = true;
@@ -108,6 +241,7 @@ document.addEventListener("DOMContentLoaded", () => {
         loading.hidden = false;
         setBusy(true);
         startProgress();
+        const t0 = performance.now();
 
         try {
             const res = await fetch("/api/v1/scan", {
@@ -129,7 +263,7 @@ document.addEventListener("DOMContentLoaded", () => {
             stopProgress();
             loading.hidden = true;
             setBusy(false);
-            renderResults(data);
+            renderResults(data, performance.now() - t0);
         } catch (e) {
             stopProgress();
             loading.hidden = true;
@@ -141,16 +275,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     /* ---------- Render del informe ---------- */
 
-    function renderResults(data) {
+    function renderResults(data, elapsedMs) {
         const tone = toneOf(data.verdict);
         lastReport = data;
         pdfError.hidden = true;
 
         $("verdict-band").className = `verdict tone-${tone}`;
-        $("report-url").textContent = data.target_url || "";
+        showSiteInfo(data.target_url, elapsedMs);
         $("verdict-title").textContent = prettify(data.verdict);
         $("verdict-summary").textContent = data.verdict_summary || "";
-        $("score-value").textContent = data.score;
         $("report-date").textContent =
             "Informe generado el " +
             new Date().toLocaleString("es-CL", { dateStyle: "long", timeStyle: "short" });
@@ -201,6 +334,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         results.hidden = false;
         results.scrollIntoView({ behavior: "smooth", block: "start" });
+        animateGauge(data.score);
     }
 
     /* ---------- Descarga del informe en PDF (servicio del backend) ---------- */
@@ -259,7 +393,10 @@ document.addEventListener("DOMContentLoaded", () => {
         scan(urlInput.value);
     });
 
-    urlInput.addEventListener("input", updateButton);
+    urlInput.addEventListener("input", () => {
+        clearFieldError();
+        updateButton();
+    });
 
     examples.forEach((btn) => {
         btn.addEventListener("click", () => {
