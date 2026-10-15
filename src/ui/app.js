@@ -308,5 +308,3 @@ document.addEventListener("DOMContentLoaded", () => {
         setTimeout(() => scan(queryUrl), 300);
     }
 });
-
-
