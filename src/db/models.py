@@ -17,6 +17,7 @@ from sqlalchemy import (
     Integer,
     Text,
     DateTime,
+    Boolean,
     ForeignKey,
     UniqueConstraint
 )
@@ -132,31 +133,54 @@ class EvidenciaRastreador(Base):
     auditoria: Mapped["Auditoria"] = relationship("Auditoria", back_populates="evidencias_rastreadores")
 
 
-class AuditoriaProgramada(Base):
-    __tablename__ = "auditorias_programadas"
+class EtapaFlujo(Base):
+    """Registro de una etapa individual en un flujo de compra/registro auditado."""
+    __tablename__ = "etapas_flujo"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    sitio_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("sitios_analizados.id", ondelete="CASCADE"), nullable=False, index=True
+    auditoria_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("auditorias.id", ondelete="CASCADE"),
+        nullable=False, index=True
     )
-    ultima_auditoria_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("auditorias.id", ondelete="CASCADE"), nullable=False, index=True
+    nombre_etapa: Mapped[str] = mapped_column(String(50), nullable=False)
+    etiqueta: Mapped[str] = mapped_column(String(100), nullable=False)
+    url: Mapped[str] = mapped_column(String(500), nullable=False)
+    orden: Mapped[int] = mapped_column(Integer, nullable=False)
+    veredicto: Mapped[str] = mapped_column(
+        String(30), nullable=False
+    )  # CUMPLE | NO_CUMPLE | NO_VERIFICABLE | NO_ALCANZADA
+    http_status: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    requests_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Relaciones
+    auditoria: Mapped["Auditoria"] = relationship("Auditoria", backref="etapas_flujo")
+    evidencias: Mapped[List["EvidenciaEtapa"]] = relationship(
+        "EvidenciaEtapa", back_populates="etapa", cascade="all, delete-orphan"
     )
-    email_notificacion: Mapped[str] = mapped_column(String(255), nullable=False)
-    intervalo_tipo: Mapped[str] = mapped_column(String(50), nullable=False)  # DEMO_2_MIN | PROD_15_DAYS
-    proxima_ejecucion_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
-    estado: Mapped[str] = mapped_column(String(30), default="PENDIENTE", nullable=False, index=True)  # PENDIENTE | PROCESANDO | COMPLETADA | FALLIDA | CANCELADA
-    reintentos: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
-    ejecutado_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    nueva_auditoria_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("auditorias.id", ondelete="SET NULL"), nullable=True
+
+
+class EvidenciaEtapa(Base):
+    """Evidencia de rastreo encontrada en una etapa del flujo (dominio o cookie nueva)."""
+    __tablename__ = "evidencias_etapa"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    etapa_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("etapas_flujo.id", ondelete="CASCADE"),
+        nullable=False, index=True
+    )
+    tipo: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # DOMINIO_NUEVO | COOKIE_NUEVA
+    valor: Mapped[str] = mapped_column(
+        String(255), nullable=False
+    )  # Solo nombre de dominio o cookie, nunca valores (DA-04)
+    es_nuevo_en_etapa: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
     )
 
     # Relaciones
-    sitio: Mapped["SitioAnalizado"] = relationship("SitioAnalizado")
-    ultima_auditoria: Mapped["Auditoria"] = relationship("Auditoria", foreign_keys=[ultima_auditoria_id])
-    nueva_auditoria: Mapped[Optional["Auditoria"]] = relationship("Auditoria", foreign_keys=[nueva_auditoria_id])
-
+    etapa: Mapped["EtapaFlujo"] = relationship("EtapaFlujo", back_populates="evidencias")

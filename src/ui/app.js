@@ -13,6 +13,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const errorMessage = $("error-message");
     const results = $("results");
     const examples = document.querySelectorAll(".link-btn");
+    const urlError = $("url-error");
 
     const STEPS = [
         "Abriendo el sitio en un navegador sin interfaz...",
@@ -52,6 +53,132 @@ document.addEventListener("DOMContentLoaded", () => {
         if (v.includes("aprob") || v.includes("cumple") || v === "ok") return "ok";
         if (v.includes("rech") || v.includes("falla") || v.includes("fail")) return "fail";
         return "warn";
+    }
+
+    /* ---------- Validación de la dirección ---------- */
+
+    const DOMAIN_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{1,61}$/;
+    const IPV4_RE = /^(?:\d{1,3}\.){3}\d{1,3}$/;
+    const FORMAT_MSG = "URL inaccesible o formato no válido. Escribe un dominio como ejemplo.cl, sin espacios.";
+
+    function parseTarget(raw) {
+        const text = (raw || "").trim();
+        if (!text) return { error: "Escribe la dirección de un sitio web." };
+        if (/\s/.test(text)) return { error: FORMAT_MSG };
+
+        const proto = text.match(/^([a-z][a-z0-9+.-]*):\/\//i);
+        if (proto && !/^https?$/i.test(proto[1])) {
+            return { error: "URL inaccesible o formato no válido. Solo se aceptan direcciones http:// o https://." };
+        }
+
+        const withProto = proto ? text : "https://" + text;
+        let host;
+        try {
+            host = new URL(withProto).hostname;
+        } catch (e) {
+            return { error: FORMAT_MSG };
+        }
+        // localhost y direcciones IP se aceptan para poder probar sitios locales
+        if (!(DOMAIN_RE.test(host) || host === "localhost" || IPV4_RE.test(host))) {
+            return { error: FORMAT_MSG };
+        }
+        return { url: withProto };
+    }
+
+    function showFieldError(message) {
+        urlError.textContent = message;
+        urlError.hidden = false;
+        urlInput.setAttribute("aria-invalid", "true");
+        urlInput.setAttribute("aria-describedby", "url-error");
+        urlInput.focus();
+    }
+
+    function clearFieldError() {
+        urlError.hidden = true;
+        urlInput.removeAttribute("aria-invalid");
+        urlInput.removeAttribute("aria-describedby");
+    }
+
+    /* ---------- Datos del sitio auditado ---------- */
+
+    function showSiteInfo(targetUrl, elapsedMs) {
+        const link = $("report-url");
+        const img = $("site-favicon");
+        const fallback = $("site-fallback");
+        const meta = $("scan-meta");
+
+        $("report-url-text").textContent = targetUrl || "";
+
+        // Solo se enlaza si es una dirección http(s) válida
+        let origin = "";
+        try {
+            const u = new URL(targetUrl);
+            if (u.protocol === "http:" || u.protocol === "https:") origin = u.origin;
+        } catch (e) {}
+        if (origin) link.setAttribute("href", targetUrl);
+        else link.removeAttribute("href");
+
+        // Ícono: se pide directamente al sitio auditado, sin servicios de terceros
+        img.toggleAttribute("hidden", true);
+        fallback.toggleAttribute("hidden", false);
+        if (origin) {
+            img.onload = () => {
+                img.toggleAttribute("hidden", false);
+                fallback.toggleAttribute("hidden", true);
+            };
+            img.onerror = () => {
+                img.toggleAttribute("hidden", true);
+                fallback.toggleAttribute("hidden", false);
+            };
+            img.src = origin + "/favicon.ico";
+        }
+
+        const ok = Number.isFinite(elapsedMs);
+        meta.toggleAttribute("hidden", !ok);
+        if (ok) {
+            const secs = (elapsedMs / 1000).toLocaleString("es-CL", {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 1,
+            });
+            $("scan-time").textContent = `Revisado en ${secs} s`;
+        }
+    }
+
+    /* ---------- Anillo de puntaje ---------- */
+
+    const GAUGE_LEN = 2 * Math.PI * 52; // circunferencia del anillo (r = 52)
+    let gaugeRun = 0;
+
+    function animateGauge(score) {
+        const value = Math.max(0, Math.min(100, Number(score) || 0));
+        const arc = $("gauge-arc");
+        const label = $("score-value");
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const run = ++gaugeRun;
+
+        $("gauge").setAttribute("aria-label", `Puntaje de cumplimiento: ${value} de 100`);
+        arc.style.strokeDasharray = GAUGE_LEN;
+        arc.style.transition = "none";
+        arc.style.strokeDashoffset = GAUGE_LEN;
+        label.textContent = reduce ? value : 0;
+
+        // Doble requestAnimationFrame: asegura que el navegador pinte el anillo vacío antes de llenarlo
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            if (run !== gaugeRun) return;
+            arc.style.transition = "";
+            arc.style.strokeDashoffset = GAUGE_LEN * (1 - value / 100);
+            if (reduce) return;
+
+            const start = performance.now();
+            const duration = 1100;
+            const tick = (now) => {
+                if (run !== gaugeRun) return;
+                const p = Math.min(1, (now - start) / duration);
+                label.textContent = Math.round(value * (1 - Math.pow(1 - p, 3)));
+                if (p < 1) requestAnimationFrame(tick);
+            };
+            requestAnimationFrame(tick);
+        }));
     }
 
     function pilarName(raw) {
@@ -98,16 +225,28 @@ document.addEventListener("DOMContentLoaded", () => {
     /* ---------- Escaneo ---------- */
 
     async function scan(raw) {
-        let target = (raw || "").trim();
-        if (!target || scanning) return;
-        if (!/^https?:\/\//i.test(target)) target = "https://" + target;
+        if (scanning) return;
+        const parsed = parseTarget(raw);
+        if (parsed.error) {
+            errorBox.hidden = true;
+            showFieldError(parsed.error);
+            return;
+        }
+        clearFieldError();
+        const target = parsed.url;
         urlInput.value = target;
+
+        const flowChecked = $("flow-checkbox") && $("flow-checkbox").checked;
+        if (flowChecked && !forceNormal) {
+            return scanFlow(target);
+        }
 
         errorBox.hidden = true;
         results.hidden = true;
         loading.hidden = false;
         setBusy(true);
         startProgress();
+        const t0 = performance.now();
 
         try {
             const res = await fetch("/api/v1/scan", {
@@ -129,7 +268,7 @@ document.addEventListener("DOMContentLoaded", () => {
             stopProgress();
             loading.hidden = true;
             setBusy(false);
-            renderResults(data);
+            renderResults(data, performance.now() - t0);
         } catch (e) {
             stopProgress();
             loading.hidden = true;
@@ -139,18 +278,20 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    /* ---------- Render del informe ---------- */
+    /* ---------- Render del informe estándar ---------- */
 
-    function renderResults(data) {
+    function renderResults(data, elapsedMs) {
         const tone = toneOf(data.verdict);
         lastReport = data;
         pdfError.hidden = true;
 
+        const flowSec = $("flow-section");
+        if (flowSec) flowSec.hidden = true;
+
         $("verdict-band").className = `verdict tone-${tone}`;
-        $("report-url").textContent = data.target_url || "";
+        showSiteInfo(data.target_url, elapsedMs);
         $("verdict-title").textContent = prettify(data.verdict);
         $("verdict-summary").textContent = data.verdict_summary || "";
-        $("score-value").textContent = data.score;
         $("report-date").textContent =
             "Informe generado el " +
             new Date().toLocaleString("es-CL", { dateStyle: "long", timeStyle: "short" });
@@ -208,6 +349,123 @@ document.addEventListener("DOMContentLoaded", () => {
             setScheduleBusy(false);
         } else {
             scheduleCard.hidden = true;
+        }
+
+        results.hidden = false;
+        results.scrollIntoView({ behavior: "smooth", block: "start" });
+        animateGauge(data.score);
+    }
+
+    /* ---------- Render del informe de flujo multietapa ---------- */
+
+    function renderFlowResults(data) {
+        const flowSec = $("flow-section");
+        if (flowSec) flowSec.hidden = false;
+        lastReport = data;
+        pdfError.hidden = true;
+
+        const tone = toneOf(data.flow_verdict);
+        $("verdict-band").className = `verdict tone-${tone}`;
+        $("report-url").textContent = data.target_url || "";
+        $("verdict-title").textContent = `Flujo: ${prettify(data.flow_verdict)}`;
+        $("verdict-summary").textContent = data.flow_verdict_summary || "";
+        $("score-value").textContent = data.flow_verdict === "CUMPLE" ? 100 : (data.flow_verdict === "NO_VERIFICABLE" ? 50 : 0);
+        $("report-date").textContent = "Auditoría de flujo completada el " + new Date().toLocaleString("es-CL", { dateStyle: "long", timeStyle: "short" });
+
+        // Ocultar pilares estándar en la vista de flujo
+        $("pilares").innerHTML = "";
+
+        const badge = $("flow-verdict-badge");
+        if (badge) {
+            badge.className = `badge tone-${tone}`;
+            badge.textContent = prettify(data.flow_verdict);
+        }
+
+        const summaryText = $("flow-summary-text");
+        if (summaryText) {
+            summaryText.textContent = data.flow_verdict_summary || "";
+        }
+
+        const timeline = $("flow-timeline");
+        if (timeline) {
+            if (!data.flow_detected) {
+                timeline.innerHTML = `
+                    <div class="flow-stage-card tone-warn">
+                        <div class="flow-stage-header">
+                            <span class="flow-stage-title">Flujo de compra/registro no detectado</span>
+                        </div>
+                        <p class="flow-stage-url">${esc(data.flow_not_detected_reason || "No se identificaron enlaces al catálogo, registro o carrito en el mismo dominio.")}</p>
+                        <p class="muted" style="margin-top:8px;">Puedes ejecutar el análisis estándar para revisar la política de privacidad, canales ARCO y cookies pre-consentimiento.</p>
+                        <button type="button" id="btn-fallback-scan" class="btn-primary" style="margin-top:14px;height:42px;font-size:14px;padding:0 20px;">
+                            ${icon("i-search", 16)} Ejecutar auditoría estándar
+                        </button>
+                    </div>
+                `;
+                const fbBtn = $("btn-fallback-scan");
+                if (fbBtn) {
+                    fbBtn.onclick = () => scan(data.target_url, true);
+                }
+            } else {
+                timeline.innerHTML = (data.stages_evaluated || []).map((s, idx) => {
+                    const sTone = toneOf(s.verdict);
+                    const domPills = (s.new_tracker_domains || []).map(d => `<span class="flow-pill pill-domain">🌐 ${esc(d)}</span>`).join("");
+                    const ckPills = (s.new_tracker_cookies || []).map(c => `<span class="flow-pill pill-cookie">🍪 ${esc(c)}</span>`).join("");
+                    const note = s.verification_note ? `<p class="flow-note">${esc(s.verification_note)}</p>` : "";
+                    return `
+                        <div class="flow-stage-card tone-${sTone}">
+                            <div class="flow-stage-header">
+                                <span class="flow-stage-title">Etapa ${idx + 1}: ${esc(s.stage_label || s.stage_name)}</span>
+                                <span class="badge tone-${sTone}">${esc(prettify(s.verdict))}</span>
+                            </div>
+                            <p class="flow-stage-url"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a></p>
+                            <div class="flow-stage-meta">
+                                ${domPills || ckPills ? `<span><b>Nuevos rastreadores:</b></span> ${domPills} ${ckPills}` : `<span class="muted">Sin nuevos rastreadores detectados en esta etapa</span>`}
+                            </div>
+                            ${note}
+                        </div>
+                    `;
+                }).join("");
+            }
+        }
+
+        const limitDiv = $("flow-limitations");
+        if (limitDiv) {
+            if (data.limitations && data.limitations.length) {
+                limitDiv.innerHTML = `
+                    <b>Limitaciones declaradas (Nivel 0 pasivo):</b>
+                    <ul>${data.limitations.map(l => `<li>${esc(l)}</li>`).join("")}</ul>
+                `;
+            } else {
+                limitDiv.innerHTML = "";
+            }
+        }
+
+        const list = $("findings-list");
+        if (data.flow_findings && data.flow_findings.length) {
+            list.innerHTML = data.flow_findings.map((f) => {
+                const t = FINDING_TONE[f.status] || "info";
+                const ticket = f.remediation_ticket
+                    ? `<div class="ticket">
+                           <div class="ticket-head">
+                               <p class="ticket-title">${icon("i-wrench", 16)}Cómo corregirlo (${esc(f.stage_label)})</p>
+                               ${f.technical_raw ? `<code>${esc(f.technical_raw)}</code>` : ""}
+                           </div>
+                           <p>${esc(f.remediation_ticket)}</p>
+                       </div>`
+                    : "";
+                return `
+                    <li class="finding tone-${t}">
+                        ${icon(TONE_ICON[t], 22)}
+                        <div class="finding-body">
+                            <p class="finding-pilar">Etapa: ${esc(f.stage_label)}</p>
+                            <h4>${esc(f.title)}</h4>
+                            <p class="finding-detail">${esc(f.detail)}</p>
+                            ${ticket}
+                        </div>
+                    </li>`;
+            }).join("");
+        } else {
+            list.innerHTML = '<li class="finding"><p class="muted">No se registraron hallazgos adicionales en el flujo.</p></li>';
         }
 
         results.hidden = false;
@@ -342,7 +600,10 @@ document.addEventListener("DOMContentLoaded", () => {
         scan(urlInput.value);
     });
 
-    urlInput.addEventListener("input", updateButton);
+    urlInput.addEventListener("input", () => {
+        clearFieldError();
+        updateButton();
+    });
 
     examples.forEach((btn) => {
         btn.addEventListener("click", () => {
