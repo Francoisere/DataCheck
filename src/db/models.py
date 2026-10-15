@@ -130,3 +130,33 @@ class EvidenciaRastreador(Base):
 
     # Relaciones
     auditoria: Mapped["Auditoria"] = relationship("Auditoria", back_populates="evidencias_rastreadores")
+
+
+class AuditoriaProgramada(Base):
+    __tablename__ = "auditorias_programadas"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    sitio_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sitios_analizados.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    ultima_auditoria_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("auditorias.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    email_notificacion: Mapped[str] = mapped_column(String(255), nullable=False)
+    intervalo_tipo: Mapped[str] = mapped_column(String(50), nullable=False)  # DEMO_2_MIN | PROD_15_DAYS
+    proxima_ejecucion_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    estado: Mapped[str] = mapped_column(String(30), default="PENDIENTE", nullable=False, index=True)  # PENDIENTE | PROCESANDO | COMPLETADA | FALLIDA | CANCELADA
+    reintentos: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    creado_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
+    ejecutado_en: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    nueva_auditoria_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("auditorias.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Relaciones
+    sitio: Mapped["SitioAnalizado"] = relationship("SitioAnalizado")
+    ultima_auditoria: Mapped["Auditoria"] = relationship("Auditoria", foreign_keys=[ultima_auditoria_id])
+    nueva_auditoria: Mapped[Optional["Auditoria"]] = relationship("Auditoria", foreign_keys=[nueva_auditoria_id])
+

@@ -127,6 +127,50 @@
                 <p id="report-date" class="report-date"></p>
             </article>
 
+            <!-- Card de Re-calendarización Automática (condicional) -->
+            <div id="schedule-card" class="schedule-card" hidden>
+                <div class="schedule-head">
+                    <span class="schedule-icon"><svg class="icon" width="22" height="22"><use href="#i-mail"/></svg></span>
+                    <div>
+                        <h3>¿Deseas programar una re-auditoría automática?</h3>
+                        <p class="muted small">Programa una nueva evaluación tras implementar los tickets de remediación. Te notificaremos los resultados por correo.</p>
+                    </div>
+                </div>
+
+                <form id="schedule-form" class="schedule-form" novalidate>
+                    <div class="schedule-inputs">
+                        <label for="schedule-email" class="sr-only">Correo electrónico</label>
+                        <input id="schedule-email" type="email" placeholder="tu-correo@ejemplo.cl" required autocomplete="email">
+                        
+                        <div class="schedule-modes">
+                            <label class="schedule-radio-label">
+                                <input type="radio" name="interval_mode" value="DEMO_2_MIN" checked>
+                                <span>Modo Demostración (Re-escanear en 2 minutos)</span>
+                            </label>
+                            <label class="schedule-radio-label">
+                                <input type="radio" name="interval_mode" value="PROD_15_DAYS">
+                                <span>Modo Producción (Re-escanear en 15 días)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <button type="submit" id="btn-schedule" class="btn-primary">
+                        <svg class="icon" width="18" height="18" id="schedule-btn-icon"><use href="#i-mail"/></svg>
+                        <span id="schedule-btn-label">Calendarizar Re-auditoría</span>
+                    </button>
+                </form>
+
+                <div id="schedule-success" class="schedule-success" hidden>
+                    <svg class="icon" width="20" height="20"><use href="#i-check"/></svg>
+                    <div>
+                        <p class="schedule-success-title">¡Re-auditoría programada con éxito!</p>
+                        <p id="schedule-success-desc" class="muted small"></p>
+                    </div>
+                </div>
+
+                <p id="schedule-error" class="schedule-error" role="alert" hidden></p>
+            </div>
+
             <p class="disclaimer">
                 <svg class="icon" width="18" height="18"><use href="#i-info"/></svg>
                 <span>Este diagnóstico es una herramienta técnica de auditoría académica basada en la Ley N° 19.628. No es una certificación ni un dictamen jurídico vinculante.</span>
