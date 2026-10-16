@@ -314,6 +314,7 @@ a { color: inherit; text-decoration: none; }
     .footer-brand { grid-column: 1 / -1; }
 }
 
+
 /* Móvil */
 @media (max-width: 760px) {
     .nav { gap: 16px; }

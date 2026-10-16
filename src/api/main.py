@@ -11,14 +11,18 @@ from fastapi.staticfiles import StaticFiles
 
 from src.api.routes import scan, health, reports, flow
 from src.db.session import init_db
+from src.core.scheduler import start_scheduler, shutdown_scheduler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Inicializar tablas en base de datos al arrancar
     await init_db()
+    # Iniciar scheduler en segundo plano para re-auditorías automáticas
+    start_scheduler()
     yield
-    # Limpieza al apagar si fuera necesario
+    # Limpieza al apagar
+    shutdown_scheduler()
 
 
 app = FastAPI(

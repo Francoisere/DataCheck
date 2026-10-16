@@ -1,1 +1,11 @@
 implementation_plan*.md
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Python cache & testing
+__pycache__/
+*.py[cod]
+.pytest_cache/

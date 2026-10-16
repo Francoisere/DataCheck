@@ -415,6 +415,17 @@ document.addEventListener("DOMContentLoaded", () => {
             list.innerHTML = '<li class="finding"><p class="muted">No se registraron hallazgos adicionales.</p></li>';
         }
 
+        // Condicional de re-auditoría programada (RF-SCHED-01)
+        if (data.verdict === "RECHAZADO" || data.verdict === "CON_OBSERVACIONES") {
+            scheduleCard.hidden = false;
+            scheduleSuccess.hidden = true;
+            scheduleError.hidden = true;
+            scheduleForm.hidden = false;
+            setScheduleBusy(false);
+        } else {
+            scheduleCard.hidden = true;
+        }
+
         results.hidden = false;
         results.scrollIntoView({ behavior: "smooth", block: "start" });
         animateGauge(data.score);
@@ -552,6 +563,78 @@ document.addEventListener("DOMContentLoaded", () => {
         pdfLabel.textContent = busy ? "Generando PDF..." : "Descargar informe PDF";
     }
 
+    /* ---------- Re-calendarización automática (RF-SCHED-01, RF-SCHED-02) ---------- */
+
+    const scheduleCard = $("schedule-card");
+    const scheduleForm = $("schedule-form");
+    const scheduleEmail = $("schedule-email");
+    const btnSchedule = $("btn-schedule");
+    const scheduleBtnIcon = $("schedule-btn-icon");
+    const scheduleBtnLabel = $("schedule-btn-label");
+    const scheduleSuccess = $("schedule-success");
+    const scheduleSuccessDesc = $("schedule-success-desc");
+    const scheduleError = $("schedule-error");
+
+    function setScheduleBusy(busy) {
+        btnSchedule.disabled = busy;
+        scheduleBtnIcon.innerHTML = `<use href="#${busy ? "i-loader" : "i-mail"}"/>`;
+        scheduleBtnIcon.classList.toggle("spin", busy);
+        scheduleBtnLabel.textContent = busy ? "Programando..." : "Calendarizar Re-auditoría";
+    }
+
+    async function handleScheduleSubmit(e) {
+        e.preventDefault();
+        scheduleError.hidden = true;
+        scheduleSuccess.hidden = true;
+
+        if (!lastReport || !lastReport.audit_id) {
+            scheduleError.textContent = "No se puede programar sin un ID de auditoría guardado.";
+            scheduleError.hidden = false;
+            return;
+        }
+
+        const email = scheduleEmail.value.trim();
+        if (!email || !email.includes("@")) {
+            scheduleError.textContent = "Por favor ingresa un correo electrónico válido.";
+            scheduleError.hidden = false;
+            return;
+        }
+
+        const modeInput = document.querySelector('input[name="interval_mode"]:checked');
+        const interval_mode = modeInput ? modeInput.value : "DEMO_2_MIN";
+
+        setScheduleBusy(true);
+
+        try {
+            const res = await fetch("/api/v1/schedules", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    audit_id: lastReport.audit_id,
+                    email: email,
+                    interval_mode: interval_mode
+                })
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ detail: res.statusText }));
+                throw new Error(typeof err.detail === "string" ? err.detail : "Error al calendarizar.");
+            }
+
+            const data = await res.json();
+            const dateStr = new Date(data.scheduled_at).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" });
+            scheduleSuccessDesc.textContent = `${data.message} Próxima ejecución: ${dateStr}.`;
+            scheduleSuccess.hidden = false;
+            scheduleForm.hidden = true;
+        } catch (err) {
+            scheduleError.textContent = "No se pudo programar: " + err.message;
+            scheduleError.hidden = false;
+        } finally {
+            setScheduleBusy(false);
+        }
+    }
+
+
     async function downloadPdf() {
         if (!lastReport) return;
         pdfError.hidden = true;
@@ -606,6 +689,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     btnPdf.addEventListener("click", downloadPdf);
+    scheduleForm.addEventListener("submit", handleScheduleSubmit);
+
 
     /* ---------- Tema claro / oscuro ---------- */
 
