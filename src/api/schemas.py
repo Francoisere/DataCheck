@@ -3,7 +3,7 @@ Esquemas de datos Pydantic V2 para la API de DataCheck.cl.
 Alineados estrictamente con el contrato OpenAPI C-01 / C-04 del Incremento 2.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from pydantic import BaseModel, Field
 
 
@@ -47,15 +47,18 @@ class ConsentBannerAudit(BaseModel):
 
 
 class FrameInfo(BaseModel):
-    url: str = Field(..., description="URL del frame")
-    origin: str = Field(..., description="Origen del frame")
-    is_third_party: bool = Field(..., description="Si el frame es de un origen de terceros")
+    url: str = Field(..., description="URL o src del frame")
+    origin: str = Field(..., description="Origen del frame (scheme + host + port)")
+    is_third_party: bool = Field(False, description="Si el frame es de un origen de terceros")
+    is_cmp_frame: bool = Field(False, description="Si el frame pertenece a un CMP conocido")
+    detected_cmp: Optional[str] = Field(None, description="Nombre del CMP si fue identificado")
 
 
 class FramesAudit(BaseModel):
-    total_frames: int = Field(..., description="Número total de frames detectados")
-    third_party_frames: List[FrameInfo] = Field(default_factory=list, description="Frames de terceros detectados")
-    cmp_frames: List[FrameInfo] = Field(default_factory=list, description="Frames de CMPs de consentimiento detectados")
+    total_frames: int = Field(0, description="Número total de frames detectados")
+    third_party_frames: Union[int, List[FrameInfo]] = Field(0, description="Cantidad o lista de frames de terceros")
+    cmp_frames: Union[int, List[FrameInfo]] = Field(0, description="Cantidad o lista de frames de CMPs de consentimiento")
+    frames: List[FrameInfo] = Field(default_factory=list, description="Lista detallada de frames detectados")
 
 
 # --- Esquemas para Auditoría de Flujo Multietapa (C-05) ---
