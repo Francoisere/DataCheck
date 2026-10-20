@@ -163,6 +163,16 @@ CMP_SIGNATURES = {
         "selectors": ["#hs-eu-cookie-confirmation", "#hs-eu-confirmation-button"],
         "container_id": "hs-eu-cookie-confirmation",
     },
+    "sourcepoint": {
+        "frame_domains": ["sourcepoint.mgr.consensu.org", "cdn.privacy-mgmt.com", "sp-prod.net"],
+        "selectors": ["[id^='sp_message_container']", ".sp_message_container", "iframe[id^='sp_message_iframe']"],
+        "container_id": "sp_message_container",
+    },
+    "trustarc": {
+        "frame_domains": ["consent.trustarc.com", "trustarc.com"],
+        "selectors": ["#truste-consent-track", "#truste-consent-button", ".truste-banner", "#trustarc-banner-overlay"],
+        "container_id": "truste-consent-track",
+    },
 }
 
 # All CMP frame domains flattened for quick lookup

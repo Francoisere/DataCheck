@@ -151,20 +151,40 @@ class RulesEngine:
         detected_domains = tracker_audit.get("detected_tracker_domains", [])
         detected_cookies = tracker_audit.get("detected_tracker_cookies", [])
 
-        banner_audit = consent_banner_audit or {}
+        banner_audit = dict(consent_banner_audit) if consent_banner_audit else {}
         banner_detected = banner_audit.get("banner_detected", False)
         has_reject_option = banner_audit.get("has_reject_option", False)
+        has_settings_option = banner_audit.get("has_settings_option", False)
+        buttons_verifiable = banner_audit.get("buttons_verifiable", True)
+        cmp_provider = banner_audit.get("cmp_provider")
+        detected_buttons = banner_audit.get("detected_buttons", [])
+
+        # Dictamen de bloqueo preventivo pre-consentimiento (blocks_prior_to_consent)
+        if banner_detected:
+            blocks_prior_to_consent = not has_unauthorized
+            banner_audit["blocks_prior_to_consent"] = blocks_prior_to_consent
+            if consent_banner_audit is not None:
+                consent_banner_audit["blocks_prior_to_consent"] = blocks_prior_to_consent
+        else:
+            blocks_prior_to_consent = None
 
         # Ajuste de puntaje del pilar de consentimiento según presencia de rastreadores y banner
         if not has_unauthorized:
-            if banner_detected and has_reject_option:
-                pilar_consent_score = 35
-                consent_status = "CUMPLE"
-            elif banner_detected and not has_reject_option:
-                pilar_consent_score = 20
-                consent_status = "OBSERVACION"
+            if banner_detected:
+                if not buttons_verifiable:
+                    # Shadow DOM cerrado: banner detectado pero controles encapsulados, sin trackers -> 35 pts
+                    pilar_consent_score = 35
+                    consent_status = "CUMPLE"
+                elif has_reject_option:
+                    pilar_consent_score = 35
+                    consent_status = "CUMPLE"
+                else:
+                    # Banner sin rechazo directo (informativo o de 2 pasos) -> 20 pts
+                    pilar_consent_score = 20
+                    consent_status = "OBSERVACION"
             else:
-                pilar_consent_score = 25
+                # Sitio limpio sin trackers ni banner -> 35 pts (sitio estático/limpio conforme)
+                pilar_consent_score = 35
                 consent_status = "CUMPLE"
 
             findings.append({
@@ -204,35 +224,69 @@ class RulesEngine:
                     )
                 })
 
-        # Hallazgos de auditoría de banner de consentimiento (Paso 10)
-        if banner_detected and not has_reject_option:
-            cmp_provider = banner_audit.get("cmp_provider")
-            buttons = banner_audit.get("detected_buttons", [])
+        # Hallazgos de auditoría de banner de consentimiento
+        if banner_detected and not buttons_verifiable:
+            findings.append({
+                "pilar": "CONSENTIMIENTO_COOKIES",
+                "status": "OK",
+                "title": "Banner Detectado con Encapsulamiento Avanzado (Shadow DOM Cerrado)",
+                "detail": (
+                    f"Se identificó la presencia de un banner de consentimiento ('{cmp_provider or 'Genérico'}'), "
+                    "pero sus controles internos se encuentran encapsulados en un Shadow DOM en modo cerrado ('closed'). "
+                    "Conforme al principio de inspección pasiva estricta (DA-01 / EC-04), los controles se catalogan como "
+                    "no verificables de forma pasiva, sin aplicar penalización de puntaje al no registrarse transferencias no consentidas."
+                ),
+                "technical_raw": f"CMP: {cmp_provider or 'Genérico'} | Shadow DOM: closed | Verificable: False",
+                "remediation_ticket": (
+                    "Asegurar que los mecanismos de consentimiento provean interfaces accesibles para verificación técnica "
+                    "y auditoría de cumplimiento normativo."
+                )
+            })
+        elif banner_detected and not has_reject_option:
             tech_raw_parts = []
             if cmp_provider:
                 tech_raw_parts.append(f"CMP: {cmp_provider}")
-            if buttons:
-                tech_raw_parts.append(f"Botones: {', '.join(buttons)}")
+            if detected_buttons:
+                tech_raw_parts.append(f"Botones: {', '.join(detected_buttons)}")
             tech_raw = " | ".join(tech_raw_parts) if tech_raw_parts else "Banner sin opción de rechazo"
 
-            findings.append({
-                "pilar": "CONSENTIMIENTO_COOKIES",
-                "status": "WARNING",
-                "title": "Banner de Consentimiento Sin Opción Real de Rechazo",
-                "detail": (
-                    "El banner o modal de cookies detectado es puramente informativo y no ofrece una opción "
-                    "real y accesible para que el titular pueda rechazar o configurar cookies no esenciales."
-                ),
-                "technical_raw": tech_raw,
-                "remediation_ticket": (
-                    "Implementar en el banner una opción visible y simétrica para rechazar cookies no esenciales "
-                    "(ej. botón 'Rechazar todas' o panel de configuración granular) al mismo nivel visual que el botón "
-                    "de aceptación, conforme a las exigencias del Roadmap y la Ley N° 19.628."
-                )
-            })
+            if has_settings_option:
+                findings.append({
+                    "pilar": "CONSENTIMIENTO_COOKIES",
+                    "status": "WARNING",
+                    "title": "Banner de 2 Pasos Sin Opción Directa de Rechazo en Primer Nivel",
+                    "detail": (
+                        f"El banner detectado ({cmp_provider or 'Genérico'}) ofrece opciones de aceptación y configuración "
+                        f"({', '.join(detected_buttons)}), pero no dispone de un botón directo de rechazo en primer nivel. "
+                        "La opción de rechazo podría requerir navegación adicional hacia el panel de configuración, "
+                        "lo cual no es accesible bajo el principio de inspección pasiva estricta (DA-01) al requerir clics activos."
+                    ),
+                    "technical_raw": tech_raw,
+                    "remediation_ticket": (
+                        "Incorporar en el primer nivel del banner un botón explícito de rechazo (ej. 'Rechazar todo' o 'Solo necesarias') "
+                        "al mismo nivel y simetría que el botón de aceptación, evitando forzar al titular a ingresar a paneles secundarios de configuración."
+                    )
+                })
+            else:
+                findings.append({
+                    "pilar": "CONSENTIMIENTO_COOKIES",
+                    "status": "WARNING",
+                    "title": "Banner de Consentimiento Sin Opción Real de Rechazo",
+                    "detail": (
+                        "El banner o modal de cookies detectado es puramente informativo y no ofrece una opción "
+                        "real y accesible para que el titular pueda rechazar o configurar cookies no esenciales."
+                    ),
+                    "technical_raw": tech_raw,
+                    "remediation_ticket": (
+                        "Implementar en el banner una opción visible y simétrica para rechazar cookies no esenciales "
+                        "(ej. botón 'Rechazar todas' o panel de configuración granular) al mismo nivel visual que el botón "
+                        "de aceptación, conforme a las exigencias del Roadmap y la Ley N° 19.628."
+                    )
+                })
         elif banner_detected and has_reject_option:
-            cmp_provider = banner_audit.get("cmp_provider")
             tech_raw = f"CMP: {cmp_provider} - Opción de rechazo verificada" if cmp_provider else "Banner con opción de rechazo"
+            if detected_buttons:
+                tech_raw += f" | Botones: {', '.join(detected_buttons)}"
             findings.append({
                 "pilar": "CONSENTIMIENTO_COOKIES",
                 "status": "OK",
@@ -263,6 +317,39 @@ class RulesEngine:
                 )
             })
 
+        # Hallazgo de evaluación de bloqueo preventivo (pre-consentimiento)
+        if banner_detected:
+            if blocks_prior_to_consent:
+                findings.append({
+                    "pilar": "CONSENTIMIENTO_COOKIES",
+                    "status": "OK",
+                    "title": "Bloqueo Preventivo Efectivo (Pre-Consentimiento)",
+                    "detail": (
+                        "El gestor de consentimiento bloquea preventivamente todos los rastreadores y cookies "
+                        "de terceros antes de la decisión del usuario."
+                    ),
+                    "technical_raw": f"CMP: {cmp_provider or 'Genérico'} | Bloqueo preventivo: Activo",
+                    "remediation_ticket": "Mantener la configuración de opt-in por defecto para toda nueva etiqueta de rastreo o analítica."
+                })
+            else:
+                findings.append({
+                    "pilar": "CONSENTIMIENTO_COOKIES",
+                    "status": "FAIL",
+                    "title": "Falla en Bloqueo Preventivo Pre-Consentimiento",
+                    "detail": (
+                        f"A pesar de contar con un banner de consentimiento ('{cmp_provider or 'Genérico'}'), "
+                        "se detectaron solicitudes de rastreo o cookies no esenciales ejecutándose antes de la interacción del usuario."
+                    ),
+                    "technical_raw": (
+                        f"CMP: {cmp_provider or 'Genérico'} | Trackers detectados pre-consentimiento: "
+                        f"{len(detected_domains)} dominios, {len(detected_cookies)} cookies"
+                    ),
+                    "remediation_ticket": (
+                        "Configurar el gestor de consentimiento para que no dispare tags publicitarios ni analíticos "
+                        "hasta recibir consentimiento explícito afirmativo."
+                    )
+                })
+
         score += pilar_consent_score
 
         # =========================================================================
@@ -273,7 +360,7 @@ class RulesEngine:
         # - APROBADO: Política funcional con contenido normativo mínimo, mención de derechos y 0 trackers.
         # - CON_OBSERVACIONES: Política genérica/incompleta, canales parciales o advertencias normativas,
         #   o banner de cookies puramente informativo sin opción real de rechazo o configuración.
-        banner_lacks_reject = banner_detected and not has_reject_option
+        banner_lacks_reject = banner_detected and buttons_verifiable and not has_reject_option
 
         if has_unauthorized:
             verdict = "RECHAZADO"
@@ -290,10 +377,15 @@ class RulesEngine:
         elif score >= 55 or banner_lacks_reject:
             verdict = "CON_OBSERVACIONES"
             if banner_lacks_reject:
-                verdict_summary = (
-                    "Cumplimiento parcial: Banner de cookies puramente informativo sin opción real "
-                    "de rechazo o configuración."
-                )
+                if has_settings_option:
+                    verdict_summary = (
+                        "Cumplimiento parcial: Banner de consentimiento de 2 pasos sin opción directa de rechazo en primer nivel."
+                    )
+                else:
+                    verdict_summary = (
+                        "Cumplimiento parcial: Banner de cookies puramente informativo sin opción real "
+                        "de rechazo o configuración."
+                    )
             else:
                 verdict_summary = (
                     "Cumplimiento parcial: El sitio presenta advertencias técnicas en la formulación "
@@ -331,7 +423,7 @@ class RulesEngine:
             },
             "findings": findings,
             "technical_raw": scan_raw_data,
-            "consent_banner_audit": consent_banner_audit,
+            "consent_banner_audit": banner_audit if banner_detected else consent_banner_audit,
             "frames_audit": frames_audit,
             "legal_disclaimer": LEGAL_DISCLAIMER
         }

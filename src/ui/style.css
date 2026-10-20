@@ -274,6 +274,20 @@ a { color: inherit; text-decoration: none; }
 .flow-limitations { padding: 14px 18px; background: var(--page); border-radius: 8px; font-size: 13px; color: var(--muted); }
 .flow-limitations ul { margin-left: 20px; margin-top: 6px; }
 
+/* Sección de Banner de Consentimiento y CMPs */
+.consent-section { padding: 32px 40px; border-bottom: 1px solid var(--line); }
+.consent-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.consent-head h3 { font-size: 20px; font-weight: 700; }
+.consent-card-content { background: var(--page); border-radius: 12px; padding: 20px 24px; border: 1px solid var(--line); }
+.consent-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.consent-item p { margin-top: 4px; font-size: 14px; }
+.consent-buttons-row { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.consent-pills-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.consent-pill { display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); font-size: 13px; font-weight: 500; }
+.consent-meta { margin-top: 12px; font-size: 13px; color: var(--muted); word-break: break-all; }
+.consent-meta code { background: var(--surface); padding: 2px 6px; border-radius: 4px; font-size: 12px; border: 1px solid var(--line); }
+.consent-frames-summary { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); }
+
 /* Re-auditoría programada por correo */
 .schedule-card { margin-top: 16px; padding: 28px 32px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
 .schedule-head { display: flex; gap: 16px; align-items: flex-start; }

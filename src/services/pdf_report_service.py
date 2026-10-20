@@ -4,6 +4,7 @@ Cumple con AC-REP-01, AC-REP-02, AC-LEG-01 y AC-SEC-01:
 - Generación de informe formal de diagnóstico en buffer binario (io.BytesIO) en < 3.0 segundos.
 - Soporte de sustento normativo Ley 21.719 / 19.628, principios y sanciones APDP.
 - Desglose por los 3 pilares legales, hallazgos empíricos y tickets técnicos de remediación.
+- Auditoría de Banner de Consentimiento y Marcos Embebidos (iframes y Shadow DOM).
 - Disclaimer formal de exención de patrocinio judicial.
 """
 
@@ -203,10 +204,70 @@ class PdfReportService:
         story.append(t_pilares)
         story.append(Spacer(1, 10))
 
+        # 4. TABLA DE AUDITORÍA DE BANNER DE CONSENTIMIENTO Y FRAMES (Paso 10 / Fase 3)
+        cb = audit_data.get("consent_banner_audit") or {}
+        fa = audit_data.get("frames_audit") or {}
+        
+        banner_detected = cb.get("banner_detected", False)
+        cmp_provider = cb.get("cmp_provider") or ("Genérico / Heurístico" if banner_detected else "No detectado")
+        has_reject = "Sí" if cb.get("has_reject_option") else "No"
+        has_accept = "Sí" if cb.get("has_accept_option") else "No"
+        has_settings = "Sí" if cb.get("has_settings_option") else "No"
+        buttons_list = ", ".join(cb.get("detected_buttons", [])) or ("Ninguno identificado" if not banner_detected else "Sin botones visibles")
+        source_frame = cb.get("banner_source_frame") or "Frame Principal"
+        verifiable = "Sí" if cb.get("buttons_verifiable", True) else "No (Shadow DOM Cerrado)"
+        
+        blocks_val = cb.get("blocks_prior_to_consent")
+        if blocks_val is True:
+            blocks_str = "Sí (Bloqueo preventivo activo)"
+        elif blocks_val is False:
+            blocks_str = "No (Trackers detectados pre-consentimiento)"
+        else:
+            blocks_str = "No aplica"
+
+        total_frames = fa.get("total_frames", 1)
+        third_party = fa.get("third_party_frames", 0)
+        cmp_frames = fa.get("cmp_frames", 0)
+
+        story.append(Paragraph("2. Auditoría del Banner de Consentimiento y Marcos Embebidos (CMPs / Iframes)", h2_style))
+
+        consent_table_data = [
+            ["Parámetro de Consentimiento", "Resultado de Inspección", "Marco y Entorno", "Auditoría de Frames"],
+            [
+                Paragraph(f"<b>Banner Detectado:</b> {'Sí' if banner_detected else 'No'}<br/><b>Proveedor CMP:</b> {escape(cmp_provider)}", body_style),
+                Paragraph(f"<b>Opción Rechazo:</b> {has_reject}<br/><b>Opción Aceptar:</b> {has_accept}<br/><b>Configuración:</b> {has_settings}", body_style),
+                Paragraph(f"<b>Origen:</b> <font size='7'>{escape(source_frame[:45])}</font><br/><b>Verificable:</b> {verifiable}<br/><b>Bloqueo Previo:</b> {blocks_str}", body_style),
+                Paragraph(f"<b>Total Frames:</b> {total_frames}<br/><b>Terceros:</b> {third_party}<br/><b>Frames CMP:</b> {cmp_frames}", body_style)
+            ],
+            [
+                Paragraph(f"<b>Botones Identificados en Banner:</b> {escape(buttons_list)}", body_style),
+                "", "", ""
+            ]
+        ]
+
+        t_consent = Table(consent_table_data, colWidths=[135, 135, 140, 130])
+        t_consent.setStyle(TableStyle([
+            ("SPAN", (0, 2), (3, 2)),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 8),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(t_consent)
+        story.append(Spacer(1, 10))
+
+        sec_counter = 3
+
         # SECCIÓN DE FLUJO MULTIETAPA (si existe información de flujo en la auditoría)
         stages = audit_data.get("stages_evaluated") or audit_data.get("stages") or []
         if stages or audit_data.get("flow_verdict"):
-            story.append(Paragraph("2. Mapa de Navegación del Flujo de Compra/Registro (Nivel 0)", h2_style))
+            story.append(Paragraph(f"{sec_counter}. Mapa de Navegación del Flujo de Compra/Registro (Nivel 0)", h2_style))
+            sec_counter += 1
             flow_verdict = audit_data.get("flow_verdict", "NO_APLICABLE")
             flow_summary = audit_data.get("flow_verdict_summary", "")
             story.append(Paragraph(f"<b>Dictamen del Flujo:</b> {escape(str(flow_verdict))} - {escape(str(flow_summary))}", body_style))
@@ -241,8 +302,8 @@ class PdfReportService:
             story.append(t_flow)
             story.append(Spacer(1, 10))
 
-        # 4. DESGLOSE DETALLADO DE HALLAZGOS Y SUSTENTO JURÍDICO
-        findings_sec_title = "3. Desglose de Hallazgos Empíricos, Sustento Legal y Tickets de Remediación" if stages else "2. Desglose de Hallazgos Empíricos, Sustento Legal y Tickets de Remediación"
+        # 5. DESGLOSE DETALLADO DE HALLAZGOS Y SUSTENTO JURÍDICO
+        findings_sec_title = f"{sec_counter}. Desglose de Hallazgos Empíricos, Sustento Legal y Tickets de Remediación"
         story.append(Paragraph(findings_sec_title, h2_style))
 
         findings = audit_data.get("findings", [])
@@ -300,7 +361,7 @@ class PdfReportService:
                 ]))
                 story.append(KeepTogether([t_finding, Spacer(1, 6)]))
 
-        # 5. DESCARGO DE RESPONSABILIDAD LEGAL (AC-SEC-01)
+        # 6. DESCARGO DE RESPONSABILIDAD LEGAL (AC-SEC-01)
         story.append(Spacer(1, 8))
         disclaimer_text = (
             "<b>AVISO LEGAL DE RESPONSABILIDAD ACADÉMICA (Ley 21.719 / 19.628):</b> "

@@ -16,9 +16,6 @@ class Settings(BaseSettings):
     # Restricciones operativas (Privacy by Design DA-04)
     MAX_SNIPPET_LENGTH: int = 300
 
-    # Nivel B: interacción con banner (desactivado por defecto, requiere revisión DA-01)
-    ENABLE_BANNER_INTERACTION: bool = False
-
     # Configuración de Servidor de Correo (SMTP)
     SMTP_HOST: str = "localhost"
     SMTP_PORT: int = 1025
