@@ -3,7 +3,7 @@ Esquemas de datos Pydantic V2 para la API de DataCheck.cl.
 Alineados estrictamente con el contrato OpenAPI C-01 / C-04 del Incremento 2.
 """
 
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from pydantic import BaseModel, Field
 
 
@@ -42,18 +42,23 @@ class ConsentBannerAudit(BaseModel):
     has_settings_option: bool = Field(False, description="Si el banner ofrece opción de configurar/personalizar")
     detected_buttons: List[str] = Field(default_factory=list, description="Textos de botones detectados en el banner")
     banner_source_frame: Optional[str] = Field(None, description="URL del frame donde se detectó el banner")
+    buttons_verifiable: bool = Field(True, description="Si los controles del banner fueron verificables (False en Shadow DOM cerrado)")
+    blocks_prior_to_consent: Optional[bool] = Field(None, description="True si bloquea trackers pre-consentimiento, False si no bloquea, None si no hay banner")
 
 
 class FrameInfo(BaseModel):
-    url: str = Field(..., description="URL del frame")
-    origin: str = Field(..., description="Origen del frame")
-    is_third_party: bool = Field(..., description="Si el frame es de un origen de terceros")
+    url: str = Field(..., description="URL o src del frame")
+    origin: str = Field(..., description="Origen del frame (scheme + host + port)")
+    is_third_party: bool = Field(False, description="Si el frame es de un origen de terceros")
+    is_cmp_frame: bool = Field(False, description="Si el frame pertenece a un CMP conocido")
+    detected_cmp: Optional[str] = Field(None, description="Nombre del CMP si fue identificado")
 
 
 class FramesAudit(BaseModel):
-    total_frames: int = Field(..., description="Número total de frames detectados")
-    third_party_frames: List[FrameInfo] = Field(default_factory=list, description="Frames de terceros detectados")
-    cmp_frames: List[FrameInfo] = Field(default_factory=list, description="Frames de CMPs de consentimiento detectados")
+    total_frames: int = Field(0, description="Número total de frames detectados")
+    third_party_frames: Union[int, List[FrameInfo]] = Field(0, description="Cantidad o lista de frames de terceros")
+    cmp_frames: Union[int, List[FrameInfo]] = Field(0, description="Cantidad o lista de frames de CMPs de consentimiento")
+    frames: List[FrameInfo] = Field(default_factory=list, description="Lista detallada de frames detectados")
 
 
 # --- Esquemas para Auditoría de Flujo Multietapa (C-05) ---
@@ -136,6 +141,3 @@ class ScheduleResponse(BaseModel):
     message: str = Field(..., description="Mensaje informativo para el usuario")
     executed_at: Optional[str] = Field(None, description="Fecha y hora ISO de ejecución")
     nueva_auditoria_id: Optional[str] = Field(None, description="UUID de la nueva auditoría ejecutada")
-
-
-

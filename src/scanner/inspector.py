@@ -24,6 +24,7 @@ from .trackers_db import (
     MANDATORY_LEGAL_KEYWORDS,
     ARCO_KEYWORDS
 )
+from .consent_detector import ConsentDetector
 
 PRIVACY_LINK_PATTERNS = [
     r"privacidad",
@@ -84,16 +85,20 @@ class WebInspector:
         traffic_capture = TrafficCapture()
 
         async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-setuid-sandbox",
-                    "--disable-dev-shm-usage",
-                    "--disable-accelerated-2d-canvas",
-                    "--disable-gpu"
-                ]
-            )
+            launch_args = [
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-accelerated-2d-canvas",
+                "--disable-gpu"
+            ]
+            try:
+                browser = await p.chromium.launch(headless=True, args=launch_args)
+            except Exception:
+                try:
+                    browser = await p.chromium.launch(channel="chrome", headless=True, args=launch_args)
+                except Exception:
+                    browser = await p.chromium.launch(channel="msedge", headless=True, args=launch_args)
 
             context: Optional[BrowserContext] = None
             try:
@@ -178,6 +183,11 @@ class WebInspector:
                     privacy_audit.get("policy_text", "")
                 )
 
+                # Auditoría de Banners de Consentimiento e iframes (Paso 10 / Fase 2)
+                consent_detection = await ConsentDetector.detect_consent(page, normalized_url)
+                consent_banner_audit = consent_detection.get("consent_banner_audit", {})
+                frames_audit = consent_detection.get("frames_audit", {})
+
                 return {
                     "target_url": normalized_url,
                     "page_load_status": page_load_status,
@@ -191,7 +201,9 @@ class WebInspector:
                         "has_unauthorized_trackers": len(detected_tracker_domains) > 0 or len(detected_tracker_cookies) > 0
                     },
                     "privacy_policy_audit": privacy_audit,
-                    "arco_channels_audit": arco_channels
+                    "arco_channels_audit": arco_channels,
+                    "consent_banner_audit": consent_banner_audit,
+                    "frames_audit": frames_audit
                 }
 
             finally:
@@ -337,5 +349,22 @@ class WebInspector:
                 "detected_emails": [],
                 "detected_terms": [],
                 "has_explicit_arco_mention": False
+            },
+            "consent_banner_audit": {
+                "banner_detected": False,
+                "cmp_provider": None,
+                "has_reject_option": False,
+                "has_accept_option": False,
+                "has_settings_option": False,
+                "detected_buttons": [],
+                "banner_source_frame": None,
+                "buttons_verifiable": True,
+                "blocks_prior_to_consent": None
+            },
+            "frames_audit": {
+                "total_frames": 0,
+                "third_party_frames": 0,
+                "cmp_frames": 0,
+                "frames": []
             }
         }

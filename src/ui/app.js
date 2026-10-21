@@ -353,6 +353,110 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    function renderConsentBanner(data) {
+        const consentSec = $("consent-section");
+        if (!consentSec) return;
+
+        const cb = data.consent_banner_audit;
+        const fa = data.frames_audit;
+
+        if (cb && cb.banner_detected) {
+            consentSec.hidden = false;
+            const badge = $("consent-badge");
+            const hasReject = cb.has_reject_option;
+            const verifiable = cb.buttons_verifiable;
+            let cTone = "ok";
+            let badgeText = "Conforme";
+
+            if (!verifiable) {
+                cTone = "info";
+                badgeText = "No verificable pasivamente";
+            } else if (!hasReject) {
+                cTone = "warn";
+                badgeText = cb.has_settings_option ? "2 Pasos (Sin rechazo directo)" : "Sin opción de rechazo";
+            }
+
+            if (badge) {
+                badge.className = `badge tone-${cTone}`;
+                badge.textContent = badgeText;
+            }
+
+            const buttonsHtml = (cb.detected_buttons && cb.detected_buttons.length)
+                ? cb.detected_buttons.map(b => `<span class="consent-pill">${esc(b)}</span>`).join(" ")
+                : '<span class="muted">No se detectaron botones legibles</span>';
+
+            const frameInfo = cb.banner_source_frame
+                ? `<p class="consent-meta"><b>Marco de origen:</b> <code>${esc(cb.banner_source_frame)}</code></p>`
+                : '<p class="consent-meta"><b>Marco de origen:</b> Frame principal</p>';
+
+            const blockingText = cb.blocks_prior_to_consent === true
+                ? '<span class="badge tone-ok">Bloqueo preventivo activo</span>'
+                : (cb.blocks_prior_to_consent === false
+                    ? '<span class="badge tone-fail">Sin bloqueo preventivo (trackers detectados)</span>'
+                    : '<span class="badge tone-info">N/A</span>');
+
+            const framesSummary = fa ? `
+                <div class="consent-frames-summary">
+                    <p class="small muted">
+                        <b>Auditoría de marcos embebidos:</b> Total frames: ${esc(fa.total_frames || 1)} |
+                        Terceros: ${esc(fa.third_party_frames || 0)} |
+                        CMPs detectados: ${esc(fa.cmp_frames || 0)}
+                    </p>
+                </div>` : "";
+
+            $("consent-card-content").innerHTML = `
+                <div class="consent-card-grid">
+                    <div class="consent-item">
+                        <span class="muted small">Proveedor CMP:</span>
+                        <p><b>${esc(cb.cmp_provider || "Genérico / Heurístico")}</b></p>
+                    </div>
+                    <div class="consent-item">
+                        <span class="muted small">Bloqueo Pre-Consentimiento:</span>
+                        <p>${blockingText}</p>
+                    </div>
+                    <div class="consent-item">
+                        <span class="muted small">Opciones de Consentimiento:</span>
+                        <p>
+                            Aceptar: <b>${cb.has_accept_option ? "Sí" : "No"}</b> |
+                            Rechazar: <b>${cb.has_reject_option ? "Sí" : "No"}</b> |
+                            Configurar: <b>${cb.has_settings_option ? "Sí" : "No"}</b>
+                        </p>
+                    </div>
+                    <div class="consent-item">
+                        <span class="muted small">Verificable Pasivamente:</span>
+                        <p><b>${verifiable ? "Sí" : "No (Shadow DOM Cerrado)"}</b></p>
+                    </div>
+                </div>
+                <div class="consent-buttons-row">
+                    <span class="muted small">Botones detectados:</span>
+                    <div class="consent-pills-list">${buttonsHtml}</div>
+                </div>
+                ${frameInfo}
+                ${framesSummary}
+            `;
+        } else if (cb && !cb.banner_detected) {
+            consentSec.hidden = false;
+            const badge = $("consent-badge");
+            if (badge) {
+                badge.className = "badge tone-info";
+                badge.textContent = "No detectado";
+            }
+            const faSummary = fa ? `
+                <div class="consent-frames-summary">
+                    <p class="small muted">
+                        <b>Auditoría de marcos embebidos:</b> Total frames: ${esc(fa.total_frames || 1)} |
+                        Terceros: ${esc(fa.third_party_frames || 0)}
+                    </p>
+                </div>` : "";
+            $("consent-card-content").innerHTML = `
+                <p class="muted">No se detectó un banner de consentimiento ni gestor CMP visible en la carga pasiva del sitio.</p>
+                ${faSummary}
+            `;
+        } else {
+            consentSec.hidden = true;
+        }
+    }
+
     /* ---------- Render del informe estándar ---------- */
 
     function renderResults(data, elapsedMs) {
@@ -384,6 +488,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     <p class="pilar-points">${esc(p.score)} de ${esc(p.max_score)} puntos</p>
                 </div>`;
         }).join("");
+
+        renderConsentBanner(data);
 
         const list = $("findings-list");
         if (data.findings && data.findings.length) {
@@ -436,6 +542,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function renderFlowResults(data, elapsedMs) {
         const flowSec = $("flow-section");
         if (flowSec) flowSec.hidden = false;
+        if ($("consent-section")) $("consent-section").hidden = true;
         lastReport = data;
         pdfError.hidden = true;
 
