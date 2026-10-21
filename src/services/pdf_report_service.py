@@ -263,6 +263,75 @@ class PdfReportService:
 
         sec_counter = 3
 
+        # 3. TRANSPARENCIA DEL RESPONSABLE (Art. 14 ter Ley 21.719)
+        rp = audit_data.get("responsible_party_audit")
+        if rp:
+            story.append(Paragraph(f"{sec_counter}. Transparencia del Responsable y Canales de Contacto (Art. 14 ter)", h2_style))
+            sec_counter += 1
+
+            is_ident = rp.get("identified") or rp.get("representative_found")
+            corp = rp.get("corporate_name")
+            rut = rp.get("detected_rut")
+            mail = rp.get("contact_email")
+            addr = rp.get("postal_address")
+
+            ident_lines = []
+            if corp:
+                ident_lines.append(f"<b>Razón Social:</b> {escape(corp)}")
+            if rut:
+                ident_lines.append(f"<b>RUT:</b> {escape(rut)}")
+            if not ident_lines:
+                ident_lines.append("Detectado (Representante)" if is_ident else "No individualizado explícitamente")
+            ident_html = "<br/>".join(ident_lines)
+
+            dpo_text = "<b>DPO:</b> Indicado / Nombrado" if rp.get("dpo_found") else "No especificado (Opcional según Art. 49/50)"
+
+            channel_lines = []
+            if mail:
+                channel_lines.append(f"<b>Email:</b> {escape(mail)}")
+            if "formulario" in rp.get("contact_channels_found", []):
+                channel_lines.append("<b>Formulario:</b> Web detectado")
+            if addr:
+                channel_lines.append(f"<b>Domicilio:</b> {escape(addr[:40])}")
+            elif "domicilio" in rp.get("contact_channels_found", []):
+                channel_lines.append("<b>Domicilio:</b> Físico")
+            if not channel_lines:
+                channel_lines.append("Ninguno detectado")
+            channels_html = "<br/>".join(channel_lines)
+
+            rp_verdict = rp.get("verdict", "OBSERVACION")
+
+            resp_table_data = [
+                ["Individualización del Responsable", "Encargado Prevención (DPO)", "Canales de Notificación", "Dictamen Art. 14 ter"],
+                [
+                    Paragraph(ident_html, body_style),
+                    Paragraph(dpo_text, body_style),
+                    Paragraph(channels_html, body_style),
+                    Paragraph(f"<b>{escape(rp_verdict)}</b>", body_style)
+                ]
+            ]
+
+            t_resp = Table(resp_table_data, colWidths=[140, 135, 140, 125])
+            t_resp.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white]),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]))
+            story.append(t_resp)
+
+            if rp_verdict != "CUMPLE":
+                disc_rp = "<font size='7' color='#64748B'><i>Diagnóstico técnico pasivo de caja negra: la ausencia de detección no implica necesariamente inexistencia jurídica, sino que los datos no se encuentran visibles de forma estructurada en la página pública evaluada.</i></font>"
+                story.append(Spacer(1, 3))
+                story.append(Paragraph(disc_rp, body_style))
+
+            story.append(Spacer(1, 10))
+
         # SECCIÓN DE FLUJO MULTIETAPA (si existe información de flujo en la auditoría)
         stages = audit_data.get("stages_evaluated") or audit_data.get("stages") or []
         if stages or audit_data.get("flow_verdict"):
