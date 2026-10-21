@@ -79,14 +79,41 @@ class RulesEngine:
                 dpo_str = "Indicado / Nombrado" if responsible_audit.get("dpo_found") else "No especificado (Opcional según Art. 49/50)"
                 ident_str = "Identificado (RUT / Razón Social / Representante)" if (responsible_audit.get("identified") or responsible_audit.get("representative_found")) else "No individualizado explícitamente"
 
+                corp = responsible_audit.get("corporate_name")
+                rut = responsible_audit.get("detected_rut")
+                mail = responsible_audit.get("contact_email")
+                addr = responsible_audit.get("postal_address")
+
+                ident_parts = []
+                if corp:
+                    ident_parts.append(f"Razón Social: {corp}")
+                if rut:
+                    ident_parts.append(f"RUT: {rut}")
+                if not ident_parts and responsible_audit.get("representative_found"):
+                    ident_parts.append("Representante legal identificado")
+
+                ident_summary = " | ".join(ident_parts) if ident_parts else ident_str
+
+                channel_parts = []
+                if mail:
+                    channel_parts.append(f"Email: {mail}")
+                if "formulario" in channels:
+                    channel_parts.append("Formulario web")
+                if addr:
+                    channel_parts.append(f"Domicilio: {addr}")
+                elif "domicilio" in channels:
+                    channel_parts.append("Domicilio físico")
+
+                channels_summary = " | ".join(channel_parts) if channel_parts else channels_str
+
                 if resp_verdict == "CUMPLE":
                     pilar_privacy_score += 5
                     findings.append({
                         "pilar": "POLITICA_PRIVACIDAD",
                         "status": "OK",
                         "title": "Identificación del Responsable y Canales de Notificación (Art. 14 ter)",
-                        "detail": f"El responsable individualiza su identidad ({ident_str}), canal de atención ({channels_str}) y estado de DPO ({dpo_str}) conforme al Art. 14 ter literales b y c.",
-                        "technical_raw": f"Canales: {channels_str} | DPO: {dpo_str} | Identificación: {ident_str}",
+                        "detail": f"El responsable individualiza su identidad ({ident_summary}), canal de atención ({channels_summary}) y estado de DPO ({dpo_str}) conforme al Art. 14 ter literales b y c.",
+                        "technical_raw": f"Entidad: {ident_summary} | Canales: {channels_summary} | DPO: {dpo_str}"[:500],
                         "remediation_ticket": "Mantener al día la designación del encargado de prevención (DPO) y los canales de notificación habilitados.",
                         "legal_basis_key": "POLITICA_PRIVACIDAD_ART14TER_OK"
                     })
@@ -96,7 +123,7 @@ class RulesEngine:
                         "status": "WARNING",
                         "title": "Omisión de Deberes de Información del Responsable (Art. 14 ter)",
                         "detail": "La política de privacidad o la página pública no individualiza con claridad el RUT/Razón Social, representante legal o carece de canales idóneos de notificación (Art. 14 ter b y c).",
-                        "technical_raw": f"Canales detectados: {channels_str} | DPO: {dpo_str} | Identificación: {ident_str}",
+                        "technical_raw": f"Canales detectados: {channels_str} | DPO: {dpo_str} | Identificación: {ident_str}"[:500],
                         "remediation_ticket": "Incorporar en el pie de página (footer) o en la sección inicial de la Política de Privacidad la individualización legal del responsable (Razón Social y RUT), el nombre o cargo del Representante Legal/DPO, y un correo de contacto o formulario directo dedicado a la recepción de solicitudes de derechos titulares (Art. 14 ter Ley 21.719).",
                         "legal_basis_key": "POLITICA_PRIVACIDAD_ART14TER_WARNING"
                     })

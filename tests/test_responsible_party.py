@@ -4,6 +4,7 @@ Pruebas automatizadas para la verificación del Art. 14 ter (letras b y c) de la
 - Detección de RUT, Razón Social y Representante legal.
 - Detección de DPO / Encargado de prevención.
 - Detección de canales de notificación (email, formulario, domicilio).
+- Extracción de datos concretos de individualización y contacto.
 - Integración en el motor de reglas (RulesEngine) y reporte técnico PDF.
 """
 
@@ -22,6 +23,7 @@ def test_detector_with_rut_and_email():
         <body>
             <p>Servicio provisto por Comercio Digital SpA, RUT 76.543.210-K.</p>
             <p>Contacto de privacidad: privacidad@comerciodigital.cl</p>
+            <p>Domicilio: Av. Presidente Kennedy 5413, Las Condes, Santiago, Chile.</p>
         </body>
     </html>
     """
@@ -29,7 +31,12 @@ def test_detector_with_rut_and_email():
     result = ResponsiblePartyDetector.detect(soup, html, policy_text=html, policy_found=True)
 
     assert result["identified"] is True
+    assert result["detected_rut"] == "76.543.210-K"
+    assert result["corporate_name"] == "Comercio Digital SpA"
+    assert result["contact_email"] == "privacidad@comerciodigital.cl"
+    assert "Santiago, Chile" in result["postal_address"]
     assert "email" in result["contact_channels_found"]
+    assert "domicilio" in result["contact_channels_found"]
     assert result["verdict"] == "CUMPLE"
     assert "conforme al Art. 14 ter" in result["notes"]
 
@@ -69,6 +76,8 @@ def test_detector_missing_info_observacion():
 
     assert result["identified"] is False
     assert result["representative_found"] is False
+    assert result["detected_rut"] is None
+    assert result["corporate_name"] is None
     assert result["verdict"] == "OBSERVACION"
     assert "omisión" in result["notes"].lower()
 
@@ -109,7 +118,11 @@ def test_rules_engine_art14ter_cumple():
             "dpo_found": True,
             "contact_channels_found": ["email", "formulario"],
             "verdict": "CUMPLE",
-            "notes": "Conforme al Art. 14 ter."
+            "notes": "Conforme al Art. 14 ter.",
+            "corporate_name": "Empresa Conforme SpA",
+            "detected_rut": "76.111.222-3",
+            "contact_email": "privacidad@empresa-conforme.cl",
+            "postal_address": "Santiago, Chile"
         }
     }
 
@@ -120,6 +133,8 @@ def test_rules_engine_art14ter_cumple():
     art14_findings = [f for f in result["findings"] if "Art. 14 ter" in f["title"]]
     assert len(art14_findings) == 1
     assert art14_findings[0]["status"] == "OK"
+    assert "Empresa Conforme SpA" in art14_findings[0]["detail"]
+    assert "76.111.222-3" in art14_findings[0]["detail"]
     assert art14_findings[0].get("legal_basis_key") == "POLITICA_PRIVACIDAD_ART14TER_OK"
 
 
@@ -157,7 +172,6 @@ def test_rules_engine_art14ter_warning_generates_ticket():
     }
 
     result = RulesEngine.evaluate(mock_scan_data)
-    # Sin los 5 pts de Art. 14 ter: 20 (link) + 10 (keywords) = 30 pts
     assert result["pilares"]["politica_privacidad"]["score"] == 30
     assert result["pilares"]["politica_privacidad"]["status"] == "OBSERVACION"
 
@@ -213,9 +227,13 @@ def test_pdf_generation_with_responsible_party():
             "identified": True,
             "representative_found": True,
             "dpo_found": True,
-            "contact_channels_found": ["email", "formulario"],
+            "contact_channels_found": ["email", "formulario", "domicilio"],
             "verdict": "CUMPLE",
-            "notes": "Conforme al Art. 14 ter."
+            "notes": "Conforme al Art. 14 ter.",
+            "corporate_name": "Retail Test S.A.",
+            "detected_rut": "77.888.999-0",
+            "contact_email": "dpo@empresa-test.cl",
+            "postal_address": "Santiago, Chile"
         }
     }
 

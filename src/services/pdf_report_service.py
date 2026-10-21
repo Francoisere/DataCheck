@@ -270,18 +270,43 @@ class PdfReportService:
             sec_counter += 1
 
             is_ident = rp.get("identified") or rp.get("representative_found")
-            ident_text = "Detectado (RUT / Razón Social / Representante)" if is_ident else "No individualizado explícitamente"
-            dpo_text = "Indicado / Nombrado" if rp.get("dpo_found") else "No especificado (Opcional según Art. 49/50)"
-            channels = rp.get("contact_channels_found", [])
-            channels_text = ", ".join([c.upper() for c in channels]) if channels else "Ninguno detectado"
+            corp = rp.get("corporate_name")
+            rut = rp.get("detected_rut")
+            mail = rp.get("contact_email")
+            addr = rp.get("postal_address")
+
+            ident_lines = []
+            if corp:
+                ident_lines.append(f"<b>Razón Social:</b> {escape(corp)}")
+            if rut:
+                ident_lines.append(f"<b>RUT:</b> {escape(rut)}")
+            if not ident_lines:
+                ident_lines.append("Detectado (Representante)" if is_ident else "No individualizado explícitamente")
+            ident_html = "<br/>".join(ident_lines)
+
+            dpo_text = "<b>DPO:</b> Indicado / Nombrado" if rp.get("dpo_found") else "No especificado (Opcional según Art. 49/50)"
+
+            channel_lines = []
+            if mail:
+                channel_lines.append(f"<b>Email:</b> {escape(mail)}")
+            if "formulario" in rp.get("contact_channels_found", []):
+                channel_lines.append("<b>Formulario:</b> Web detectado")
+            if addr:
+                channel_lines.append(f"<b>Domicilio:</b> {escape(addr[:40])}")
+            elif "domicilio" in rp.get("contact_channels_found", []):
+                channel_lines.append("<b>Domicilio:</b> Físico")
+            if not channel_lines:
+                channel_lines.append("Ninguno detectado")
+            channels_html = "<br/>".join(channel_lines)
+
             rp_verdict = rp.get("verdict", "OBSERVACION")
 
             resp_table_data = [
                 ["Individualización del Responsable", "Encargado Prevención (DPO)", "Canales de Notificación", "Dictamen Art. 14 ter"],
                 [
-                    Paragraph(escape(ident_text), body_style),
-                    Paragraph(escape(dpo_text), body_style),
-                    Paragraph(escape(channels_text), body_style),
+                    Paragraph(ident_html, body_style),
+                    Paragraph(dpo_text, body_style),
+                    Paragraph(channels_html, body_style),
                     Paragraph(f"<b>{escape(rp_verdict)}</b>", body_style)
                 ]
             ]

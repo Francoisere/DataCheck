@@ -115,6 +115,10 @@ class ResponsiblePartyAudit(BaseModel):
     contact_channels_found: List[str] = Field(default_factory=list, description="Canales identificados (email, formulario, domicilio)")
     verdict: str = Field(..., description="CUMPLE | OBSERVACION | NO_VERIFICABLE")
     notes: str = Field(..., description="Resumen o justificación técnica de la evaluación")
+    corporate_name: Optional[str] = Field(None, description="Razón Social o nombre de la entidad identificada")
+    detected_rut: Optional[str] = Field(None, description="RUT de la empresa/responsable identificado")
+    contact_email: Optional[str] = Field(None, description="Correo electrónico formal de contacto o notificación")
+    postal_address: Optional[str] = Field(None, description="Domicilio postal o dirección detectada")
 
 
 class ScanResponse(BaseModel):

@@ -487,17 +487,44 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const isIdentified = rp.identified || rp.representative_found;
-        const channels = (rp.contact_channels_found && rp.contact_channels_found.length)
-            ? rp.contact_channels_found.map(c => `<span class="consent-pill">${esc(c.toUpperCase())}</span>`).join(" ")
-            : '<span class="muted">Ninguno detectado</span>';
 
-        const dpoText = rp.dpo_found
-            ? '<span class="badge tone-ok">Indicado</span>'
-            : '<span class="badge tone-neutral">No especificado (Opcional según Art. 49/50)</span>';
+        let identDetailsHtml = "";
+        if (rp.corporate_name) {
+            identDetailsHtml += `<p style="margin: 4px 0 0; font-size: 0.88rem; font-weight: 600; color: var(--text, #fff);">${esc(rp.corporate_name)}</p>`;
+        }
+        if (rp.detected_rut) {
+            identDetailsHtml += `<p style="margin: 2px 0 0; font-size: 0.78rem; font-family: monospace; color: var(--text-muted, #a1a1aa);">RUT: ${esc(rp.detected_rut)}</p>`;
+        }
+        if (rp.representative_found && !rp.corporate_name) {
+            identDetailsHtml += `<p style="margin: 4px 0 0; font-size: 0.82rem; color: var(--text, #fff);">Representante legal mencionado</p>`;
+        }
 
         const identText = isIdentified
-            ? '<span class="badge tone-ok">Detectado</span>'
+            ? `<div style="display: flex; align-items: center; gap: 6px;"><span class="badge tone-ok">Detectado</span></div>${identDetailsHtml}`
             : '<span class="badge tone-warn">No detectado</span>';
+
+        const dpoText = rp.dpo_found
+            ? '<span class="badge tone-ok">Indicado</span><p style="margin: 4px 0 0; font-size: 0.8rem; color: var(--text, #fff);">Oficial de Privacidad / DPO</p>'
+            : '<span class="badge tone-neutral">No especificado (Opcional según Art. 49/50)</span>';
+
+        let channelRows = [];
+        if (rp.contact_email) {
+            channelRows.push(`<div><span style="font-size: 0.75rem; color: var(--text-muted, #999);">Email:</span> <code style="font-size: 0.78rem;">${esc(rp.contact_email)}</code></div>`);
+        }
+        if (rp.contact_channels_found && rp.contact_channels_found.includes("formulario")) {
+            channelRows.push(`<div><span style="font-size: 0.75rem; color: var(--text-muted, #999);">Formulario:</span> <span class="consent-pill" style="font-size: 0.75rem;">Detectado</span></div>`);
+        }
+        if (rp.postal_address) {
+            channelRows.push(`<div><span style="font-size: 0.75rem; color: var(--text-muted, #999);">Domicilio:</span> <span style="font-size: 0.78rem; color: var(--text, #fff);">${esc(rp.postal_address)}</span></div>`);
+        } else if (rp.contact_channels_found && rp.contact_channels_found.includes("domicilio")) {
+            channelRows.push(`<div><span style="font-size: 0.75rem; color: var(--text-muted, #999);">Domicilio:</span> <span class="consent-pill" style="font-size: 0.75rem;">Físico detectado</span></div>`);
+        }
+
+        const channelsHtml = channelRows.length
+            ? `<div style="display: flex; flex-direction: column; gap: 4px; margin-top: 4px;">${channelRows.join("")}</div>`
+            : (rp.contact_channels_found && rp.contact_channels_found.length
+                ? rp.contact_channels_found.map(c => `<span class="consent-pill">${esc(c.toUpperCase())}</span>`).join(" ")
+                : '<span class="muted">Ninguno detectado</span>');
 
         const disclaimer = (v !== "CUMPLE")
             ? `<p class="consent-meta" style="margin-top: 10px; font-style: italic; font-size: 0.82rem; color: var(--text-muted, #71717a);">
@@ -508,7 +535,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const content = $("responsible-card-content");
         if (content) {
             content.innerHTML = `
-                <div class="responsible-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 8px;">
+                <div class="responsible-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 8px;">
                     <div class="resp-item" style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.07);">
                         <div style="font-size: 0.8rem; color: var(--text-muted, #999); margin-bottom: 4px;">Individualización Empresa / Representante</div>
                         <div>${identText}</div>
@@ -519,7 +546,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     </div>
                     <div class="resp-item" style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.07);">
                         <div style="font-size: 0.8rem; color: var(--text-muted, #999); margin-bottom: 4px;">Canales de atención habilitados</div>
-                        <div>${channels}</div>
+                        <div>${channelsHtml}</div>
                     </div>
                 </div>
                 ${disclaimer}
