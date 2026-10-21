@@ -107,6 +107,16 @@ class FlowAuditResponse(BaseModel):
     legal_disclaimer: str = Field(..., description="Descargo de responsabilidad")
 
 
+class ResponsiblePartyAudit(BaseModel):
+    """Auditoría de transparencia del responsable (Art. 14 ter b y c Ley 21.719)."""
+    identified: bool = Field(..., description="Indica si se identificó razón social, RUT o titular de la entidad")
+    representative_found: bool = Field(..., description="Si se menciona representante legal")
+    dpo_found: bool = Field(..., description="Si se menciona encargado de prevención o DPO (Art. 49/50)")
+    contact_channels_found: List[str] = Field(default_factory=list, description="Canales identificados (email, formulario, domicilio)")
+    verdict: str = Field(..., description="CUMPLE | OBSERVACION | NO_VERIFICABLE")
+    notes: str = Field(..., description="Resumen o justificación técnica de la evaluación")
+
+
 class ScanResponse(BaseModel):
     audit_id: Optional[str] = Field(None, description="Identificador único UUID de la auditoría en PostgreSQL")
     target_url: str = Field(..., description="URL normalizada y auditada")
@@ -119,6 +129,7 @@ class ScanResponse(BaseModel):
     technical_raw: Optional[Dict[str, Any]] = Field(None, description="Metadatos técnicos complementarios")
     consent_banner_audit: Optional[ConsentBannerAudit] = Field(None, description="Resultado de la detección de banner de consentimiento")
     frames_audit: Optional[FramesAudit] = Field(None, description="Resultado del análisis de frames e iframes")
+    responsible_party_audit: Optional[ResponsiblePartyAudit] = Field(None, description="Resultado de la auditoría de deberes del responsable (Art. 14 ter b y c Ley 21.719)")
     legal_disclaimer: str = Field(..., description="Aviso legal de descargo de responsabilidad académica")
     pdf_report_url: Optional[str] = Field(None, description="Enlace para descargar el informe oficial en PDF")
 

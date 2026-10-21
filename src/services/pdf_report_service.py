@@ -263,6 +263,50 @@ class PdfReportService:
 
         sec_counter = 3
 
+        # 3. TRANSPARENCIA DEL RESPONSABLE (Art. 14 ter Ley 21.719)
+        rp = audit_data.get("responsible_party_audit")
+        if rp:
+            story.append(Paragraph(f"{sec_counter}. Transparencia del Responsable y Canales de Contacto (Art. 14 ter)", h2_style))
+            sec_counter += 1
+
+            is_ident = rp.get("identified") or rp.get("representative_found")
+            ident_text = "Detectado (RUT / Razón Social / Representante)" if is_ident else "No individualizado explícitamente"
+            dpo_text = "Indicado / Nombrado" if rp.get("dpo_found") else "No especificado (Opcional según Art. 49/50)"
+            channels = rp.get("contact_channels_found", [])
+            channels_text = ", ".join([c.upper() for c in channels]) if channels else "Ninguno detectado"
+            rp_verdict = rp.get("verdict", "OBSERVACION")
+
+            resp_table_data = [
+                ["Individualización del Responsable", "Encargado Prevención (DPO)", "Canales de Notificación", "Dictamen Art. 14 ter"],
+                [
+                    Paragraph(escape(ident_text), body_style),
+                    Paragraph(escape(dpo_text), body_style),
+                    Paragraph(escape(channels_text), body_style),
+                    Paragraph(f"<b>{escape(rp_verdict)}</b>", body_style)
+                ]
+            ]
+
+            t_resp = Table(resp_table_data, colWidths=[140, 135, 140, 125])
+            t_resp.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white]),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]))
+            story.append(t_resp)
+
+            if rp_verdict != "CUMPLE":
+                disc_rp = "<font size='7' color='#64748B'><i>Diagnóstico técnico pasivo de caja negra: la ausencia de detección no implica necesariamente inexistencia jurídica, sino que los datos no se encuentran visibles de forma estructurada en la página pública evaluada.</i></font>"
+                story.append(Spacer(1, 3))
+                story.append(Paragraph(disc_rp, body_style))
+
+            story.append(Spacer(1, 10))
+
         # SECCIÓN DE FLUJO MULTIETAPA (si existe información de flujo en la auditoría)
         stages = audit_data.get("stages_evaluated") or audit_data.get("stages") or []
         if stages or audit_data.get("flow_verdict"):

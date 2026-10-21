@@ -457,6 +457,76 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    function renderResponsibleParty(data) {
+        const respSec = $("responsible-section");
+        if (!respSec) return;
+
+        const rp = data.responsible_party_audit;
+        if (!rp) {
+            respSec.hidden = true;
+            return;
+        }
+
+        respSec.hidden = false;
+        const badge = $("responsible-badge");
+        const v = rp.verdict || "OBSERVACION";
+        let tone = "ok";
+        let badgeText = "Conforme (Art. 14 ter)";
+
+        if (v === "NO_VERIFICABLE") {
+            tone = "info";
+            badgeText = "No verificable";
+        } else if (v === "OBSERVACION" || v === "NO_DETECTADO") {
+            tone = "warn";
+            badgeText = "Observación de Transparencia";
+        }
+
+        if (badge) {
+            badge.className = `badge tone-${tone}`;
+            badge.textContent = badgeText;
+        }
+
+        const isIdentified = rp.identified || rp.representative_found;
+        const channels = (rp.contact_channels_found && rp.contact_channels_found.length)
+            ? rp.contact_channels_found.map(c => `<span class="consent-pill">${esc(c.toUpperCase())}</span>`).join(" ")
+            : '<span class="muted">Ninguno detectado</span>';
+
+        const dpoText = rp.dpo_found
+            ? '<span class="badge tone-ok">Indicado</span>'
+            : '<span class="badge tone-neutral">No especificado (Opcional según Art. 49/50)</span>';
+
+        const identText = isIdentified
+            ? '<span class="badge tone-ok">Detectado</span>'
+            : '<span class="badge tone-warn">No detectado</span>';
+
+        const disclaimer = (v !== "CUMPLE")
+            ? `<p class="consent-meta" style="margin-top: 10px; font-style: italic; font-size: 0.82rem; color: var(--text-muted, #71717a);">
+                 <b>Nota técnica:</b> Diagnóstico técnico pasivo de caja negra: la ausencia de detección no implica necesariamente inexistencia jurídica, sino que los datos no se encuentran visibles de forma estructurada en la página pública evaluada.
+               </p>`
+            : '';
+
+        const content = $("responsible-card-content");
+        if (content) {
+            content.innerHTML = `
+                <div class="responsible-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 8px;">
+                    <div class="resp-item" style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.07);">
+                        <div style="font-size: 0.8rem; color: var(--text-muted, #999); margin-bottom: 4px;">Individualización Empresa / Representante</div>
+                        <div>${identText}</div>
+                    </div>
+                    <div class="resp-item" style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.07);">
+                        <div style="font-size: 0.8rem; color: var(--text-muted, #999); margin-bottom: 4px;">Encargado de Prevención / DPO</div>
+                        <div>${dpoText}</div>
+                    </div>
+                    <div class="resp-item" style="background: rgba(255,255,255,0.03); padding: 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.07);">
+                        <div style="font-size: 0.8rem; color: var(--text-muted, #999); margin-bottom: 4px;">Canales de atención habilitados</div>
+                        <div>${channels}</div>
+                    </div>
+                </div>
+                ${disclaimer}
+            `;
+        }
+    }
+
     /* ---------- Render del informe estándar ---------- */
 
     function renderResults(data, elapsedMs) {
@@ -490,6 +560,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }).join("");
 
         renderConsentBanner(data);
+        renderResponsibleParty(data);
 
         const list = $("findings-list");
         if (data.findings && data.findings.length) {
@@ -543,6 +614,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const flowSec = $("flow-section");
         if (flowSec) flowSec.hidden = false;
         if ($("consent-section")) $("consent-section").hidden = true;
+        if ($("responsible-section")) $("responsible-section").hidden = true;
         lastReport = data;
         pdfError.hidden = true;
 

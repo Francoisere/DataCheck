@@ -89,6 +89,34 @@ LEGAL_CATALOG: Dict[str, LegalCitation] = {
         sancion_estimada="Sin sanción aplicable.",
         remediation_guide="Revisar anualmente las finalidades declaradas y actualizar ante nuevos tratamientos."
     ),
+    "POLITICA_PRIVACIDAD_ART14TER_OK": LegalCitation(
+        pilar="POLITICA_PRIVACIDAD",
+        articulo_ley="Art. 14 ter literales b) y c) - Ley N° 21.719",
+        principio_vulnerado="Principio de Transparencia e Información del Responsable",
+        descripcion_normativa=(
+            "El responsable del tratamiento individualiza adecuadamente su identidad, representante legal "
+            "o DPO e informa canales directos e idóneos para la recepción y notificación de solicitudes de los titulares."
+        ),
+        severidad_apdp="Conforme",
+        sancion_estimada="Sin sanción. Deber de transparencia activo cumplido.",
+        remediation_guide="Mantener actualizados los datos de contacto y la designación del encargado de prevención (DPO)."
+    ),
+    "POLITICA_PRIVACIDAD_ART14TER_WARNING": LegalCitation(
+        pilar="POLITICA_PRIVACIDAD",
+        articulo_ley="Art. 14 ter literales b) y c) - Ley N° 21.719",
+        principio_vulnerado="Principio de Transparencia e Información del Responsable",
+        descripcion_normativa=(
+            "Omisión o deficiencia en la individualización del responsable (Razón Social/RUT), representante legal, "
+            "encargado de prevención (DPO) o en los canales formales de notificación de solicitudes de los titulares."
+        ),
+        severidad_apdp="Infracción Leve (Art. 34 bis letras b y c)",
+        sancion_estimada="Amonestación escrita o multa de hasta 5.000 UTM (~$330M CLP).",
+        remediation_guide=(
+            "Incorporar en el pie de página (footer) o en la sección inicial de la Política de Privacidad la individualización legal "
+            "del responsable (Razón Social y RUT), el nombre o cargo del Representante Legal/DPO, y un correo de contacto o formulario "
+            "directo dedicado a la recepción de solicitudes de derechos titulares (Art. 14 ter Ley 21.719)."
+        )
+    ),
     "CANALES_ARCO_FAIL": LegalCitation(
         pilar="CANALES_ARCO",
         articulo_ley="Arts. 19 a 24 (Ejercicio de Derechos de Acceso, Rectificación, Cancelación y Oposición) - Ley 21.719 / Ley 19.628",
@@ -129,10 +157,14 @@ LEGAL_CATALOG: Dict[str, LegalCitation] = {
 }
 
 
-def get_legal_basis(pilar: str, status: str) -> LegalCitation:
+def get_legal_basis(pilar: str, status: str, key_override: Optional[str] = None) -> LegalCitation:
     """
-    Retorna la fundamentación jurídica exacta según el pilar y su severidad técnica.
+    Retorna la fundamentación jurídica exacta según el pilar y su severidad técnica,
+    o una clave específica si key_override está definido.
     """
+    if key_override and key_override in LEGAL_CATALOG:
+        return LEGAL_CATALOG[key_override]
+
     norm_pilar = pilar.upper()
     norm_status = status.upper()
 

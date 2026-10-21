@@ -25,6 +25,7 @@ from .trackers_db import (
     ARCO_KEYWORDS
 )
 from .consent_detector import ConsentDetector
+from .responsible_detector import ResponsiblePartyDetector
 
 PRIVACY_LINK_PATTERNS = [
     r"privacidad",
@@ -188,6 +189,14 @@ class WebInspector:
                 consent_banner_audit = consent_detection.get("consent_banner_audit", {})
                 frames_audit = consent_detection.get("frames_audit", {})
 
+                # Auditoría de Transparencia del Responsable (Art. 14 ter b y c - Ley 21.719)
+                responsible_audit = ResponsiblePartyDetector.detect(
+                    soup=soup,
+                    html_content=html_content,
+                    policy_text=privacy_audit.get("policy_text", ""),
+                    policy_found=privacy_audit.get("found", False)
+                )
+
                 return {
                     "target_url": normalized_url,
                     "page_load_status": page_load_status,
@@ -203,7 +212,8 @@ class WebInspector:
                     "privacy_policy_audit": privacy_audit,
                     "arco_channels_audit": arco_channels,
                     "consent_banner_audit": consent_banner_audit,
-                    "frames_audit": frames_audit
+                    "frames_audit": frames_audit,
+                    "responsible_party_audit": responsible_audit
                 }
 
             finally:
@@ -366,5 +376,13 @@ class WebInspector:
                 "third_party_frames": 0,
                 "cmp_frames": 0,
                 "frames": []
+            },
+            "responsible_party_audit": {
+                "identified": False,
+                "representative_found": False,
+                "dpo_found": False,
+                "contact_channels_found": [],
+                "verdict": "NO_VERIFICABLE",
+                "notes": "No fue posible verificar información del responsable por agotamiento de tiempo de escaneo."
             }
         }

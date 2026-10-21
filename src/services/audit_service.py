@@ -55,7 +55,7 @@ class AuditService:
         # Enriquecer cada hallazgo con sustento normativo (Ley 21.719)
         from src.core.legal_catalog import get_legal_basis
         for f in audit_result.get("findings", []):
-            citation = get_legal_basis(f.get("pilar", ""), f.get("status", ""))
+            citation = get_legal_basis(f.get("pilar", ""), f.get("status", ""), f.get("legal_basis_key"))
             f["articulo_ley"] = citation.articulo_ley
             f["principio_vulnerado"] = citation.principio_vulnerado
             f["sancion_estimada"] = citation.sancion_estimada
