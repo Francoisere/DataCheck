@@ -49,10 +49,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function toneOf(value) {
-        const v = String(value || "").toLowerCase();
-        if (v.includes("aprob") || v.includes("cumple") || v === "ok") return "ok";
-        if (v.includes("rech") || v.includes("falla") || v.includes("fail")) return "fail";
-        return "warn";
+    const v = String(value || "").toLowerCase();
+    // Primero los negativos: "no_cumple" también contiene "cumple"
+    if (/(^|[^a-z])no[_\s-]?cumple/.test(v) || v.includes("rech") || v.includes("falla") || v.includes("fail")) return "fail";
+    if (v.includes("aprob") || v.includes("cumple") || v === "ok") return "ok";
+    return "warn";
     }
 
     /* ---------- Validación de la dirección ---------- */
