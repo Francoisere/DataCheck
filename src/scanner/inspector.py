@@ -1,9 +1,9 @@
 """
-Motor de Inspección Pasiva con Playwright (DA-01, DA-02, DA-04).
+Motor de Inspección Pasiva con Playwright (DA-01, DA-02, DA-04, FB-01, FB-02, FB-03).
 Garantías operativas:
-- Exclusivamente peticiones HTTP GET públicas (sin fill, click en forms, ni mutaciones).
-- Timeout global forzado de 25 segundos con asyncio.wait_for.
-- Manejo resiliente de caídas DNS (net::ERR_NAME_NOT_RESOLVED) y bloqueos WAF (HTTP 403/503).
+- Exclusivamente peticiones HTTP GET públicas: route interceptor aborta cualquier método no-GET (FB-01).
+- Timeout global forzado de 25 segundos con asyncio.wait_for y force_close de procesos Chromium (FB-03).
+- Manejo resiliente de caídas DNS y bloqueos WAF (HTTP 403/503 o antibot) asignando page_load_status=0 (FB-02).
 - Cierre garantizado de contextos Chromium en bloque try/finally para evitar procesos zombies.
 - Restricción estricta de longitud en snippets de texto (<= 300 caracteres).
 """
@@ -12,7 +12,7 @@ import asyncio
 import re
 import urllib.parse
 from typing import Dict, List, Any, Optional
-from playwright.async_api import async_playwright, Page, BrowserContext, Error as PlaywrightError
+from playwright.async_api import async_playwright, Page, BrowserContext, Browser, Error as PlaywrightError
 from bs4 import BeautifulSoup
 
 from src.core.config import settings
@@ -62,11 +62,33 @@ class WebInspector:
     ):
         self.timeout_seconds = timeout_seconds
         self.page_timeout_ms = page_timeout_ms
+        self._active_browser: Optional[Browser] = None
+        self._active_context: Optional[BrowserContext] = None
+
+    async def force_close(self) -> None:
+        """
+        Cierre forzoso de contextos y procesos Chromium para evitar procesos huérfanos (FB-03).
+        """
+        if self._active_context:
+            try:
+                await self._active_context.close()
+            except Exception:
+                pass
+            finally:
+                self._active_context = None
+
+        if self._active_browser:
+            try:
+                await self._active_browser.close()
+            except Exception:
+                pass
+            finally:
+                self._active_browser = None
 
     async def scan_url(self, raw_url: str) -> Dict[str, Any]:
         """
-        Punto de entrada principal con garantía estricta de timeout global (DA-02).
-        Si el análisis supera los 25 segundos, se aborta y limpia de forma segura.
+        Punto de entrada principal con garantía estricta de timeout global (DA-02 / FB-03).
+        Si el análisis supera los 25 segundos, se aborta forzosamente y limpia de forma segura.
         """
         try:
             return await asyncio.wait_for(
@@ -74,7 +96,8 @@ class WebInspector:
                 timeout=self.timeout_seconds
             )
         except asyncio.TimeoutError:
-            normalized_url, _ = sanitize_url(raw_url)
+            await self.force_close()
+            normalized_url, _ = sanitize_url(raw_url, check_ssrf=False)
             return self._build_timeout_fallback(normalized_url)
 
     async def _execute_scan(self, raw_url: str) -> Dict[str, Any]:
@@ -101,6 +124,7 @@ class WebInspector:
                 except Exception:
                     browser = await p.chromium.launch(channel="msedge", headless=True, args=launch_args)
 
+            self._active_browser = browser
             context: Optional[BrowserContext] = None
             try:
                 context = await browser.new_context(
@@ -111,8 +135,19 @@ class WebInspector:
                     ),
                     viewport={"width": 1280, "height": 800}
                 )
+                self._active_context = context
+
+                # FB-01: Intercepción estricta: abortar cualquier petición que no sea HTTP GET
+                async def block_non_get(route, request):
+                    if request.method != "GET":
+                        await route.abort("blockedbyclient")
+                    else:
+                        await route.continue_()
+
+                await context.route("**/*", block_non_get)
 
                 page: Page = await context.new_page()
+                await page.route("**/*", block_non_get)
 
                 # Listener pasivo de tráfico de red
                 page.on("request", traffic_capture.handle_request)
@@ -129,7 +164,23 @@ class WebInspector:
                     if response:
                         page_load_status = response.status
                         if page_load_status in (403, 503):
-                            error_message = f"Sitio no accesible para análisis (HTTP {page_load_status} - posible bloqueo WAF)"
+                            # FB-02: Bloqueo WAF / Cloudflare -> page_load_status=0
+                            page_load_status = 0
+                            error_message = "BLOQUEO_WAF_ANTIBOT"
+                        else:
+                            # Detección de Cloudflare Challenge o WAF en el título
+                            try:
+                                page_title = await page.title()
+                                if any(w in page_title.lower() for w in (
+                                    "just a moment...",
+                                    "attention required! | cloudflare",
+                                    "ddos protection by cloudflare",
+                                    "access denied"
+                                )):
+                                    page_load_status = 0
+                                    error_message = "BLOQUEO_WAF_ANTIBOT"
+                            except Exception:
+                                pass
                 except PlaywrightError as pe:
                     error_str = str(pe)
                     if "ERR_NAME_NOT_RESOLVED" in error_str:
@@ -144,6 +195,63 @@ class WebInspector:
                 except Exception as ex:
                     error_message = f"Error inesperado al acceder: {str(ex)[:120]}"
                     page_load_status = 0
+
+                # Si el sitio no es accesible o fue bloqueado por WAF, retornar inmediatamente sin esperas
+                if page_load_status == 0:
+                    return {
+                        "target_url": normalized_url,
+                        "page_load_status": 0,
+                        "error_message": error_message or "Sitio no accesible para análisis técnico pasivo.",
+                        "tracker_audit": {
+                            "detected_tracker_domains": traffic_capture.detected_tracker_domains,
+                            "detected_tracker_cookies": [],
+                            "total_cookies": 0,
+                            "raw_cookies": [],
+                            "local_storage_keys_count": 0,
+                            "has_unauthorized_trackers": len(traffic_capture.detected_tracker_domains) > 0
+                        },
+                        "privacy_policy_audit": {
+                            "found": False,
+                            "url": None,
+                            "http_status": 0,
+                            "policy_text_snippet": "",
+                            "policy_text": "",
+                            "found_keywords": [],
+                            "missing_keywords": MANDATORY_LEGAL_KEYWORDS,
+                            "has_mandatory_keywords": False
+                        },
+                        "arco_channels_audit": {
+                            "found": False,
+                            "detected_emails": [],
+                            "detected_terms": [],
+                            "has_explicit_arco_mention": False
+                        },
+                        "consent_banner_audit": {
+                            "banner_detected": False,
+                            "cmp_provider": None,
+                            "has_reject_option": False,
+                            "has_accept_option": False,
+                            "has_settings_option": False,
+                            "detected_buttons": [],
+                            "banner_source_frame": None,
+                            "buttons_verifiable": True,
+                            "blocks_prior_to_consent": None
+                        },
+                        "frames_audit": {
+                            "total_frames": 0,
+                            "third_party_frames": 0,
+                            "cmp_frames": 0,
+                            "frames": []
+                        },
+                        "responsible_party_audit": {
+                            "identified": False,
+                            "representative_found": False,
+                            "dpo_found": False,
+                            "contact_channels_found": [],
+                            "verdict": "NO_VERIFICABLE",
+                            "notes": "No fue posible verificar información del responsable debido al bloqueo de acceso perimetral."
+                        }
+                    }
 
                 # Pausa breve para capturar scripts asíncronos iniciales
                 await asyncio.sleep(1.5)
@@ -217,13 +325,15 @@ class WebInspector:
                 }
 
             finally:
-                # Cierre garantizado del contexto para prevenir fugas de memoria y zombies
+                # Cierre garantizado del contexto para prevenir fugas de memoria y zombies (FB-03)
                 if context:
                     try:
                         await context.close()
                     except Exception:
                         pass
                 await browser.close()
+                self._active_context = None
+                self._active_browser = None
 
     def _find_privacy_links(self, soup: BeautifulSoup, base_url: str) -> List[Dict[str, str]]:
         found_links = []
@@ -330,12 +440,12 @@ class WebInspector:
 
     def _build_timeout_fallback(self, normalized_url: str) -> Dict[str, Any]:
         """
-        Respuesta estructurada para cuando el sitio agota el timeout forzado de 25s (TEST-TO-02).
+        Respuesta estructurada para cuando el sitio agota el timeout forzado de 25s (TEST-TO-02 / FB-03).
         """
         return {
             "target_url": normalized_url,
             "page_load_status": 0,
-            "error_message": "Tiempo límite de escaneo alcanzado (25 segundos). El sitio objetivo no respondió dentro de los márgenes de auditoría.",
+            "error_message": f"Tiempo límite global de inspección superado ({self.timeout_seconds}s).",
             "tracker_audit": {
                 "detected_tracker_domains": [],
                 "detected_tracker_cookies": [],

@@ -5,6 +5,7 @@ Normalización URL -> Inspección Pasiva (Playwright) -> Motor de Reglas -> Pers
 """
 
 import time
+import asyncio
 import logging
 from typing import Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,8 +46,35 @@ class AuditService:
         # 1. Normalización
         normalized_url, domain = sanitize_url(raw_url)
 
-        # 2. Inspección pasiva
-        scan_raw = await self.inspector.scan_url(normalized_url)
+        # 2. Inspección pasiva con límite asíncrono estricto (FB-03)
+        try:
+            scan_raw = await asyncio.wait_for(
+                self.inspector.scan_url(normalized_url),
+                timeout=24.0
+            )
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout global excedido (24s) escaneando {normalized_url}")
+            await self.inspector.force_close()
+            scan_raw = {
+                "target_url": normalized_url,
+                "page_load_status": 0,
+                "error_message": "TIMEOUT_EXCEDIDO",
+                "tracker_audit": {
+                    "has_unauthorized_trackers": False,
+                    "detected_tracker_domains": [],
+                    "detected_tracker_cookies": []
+                },
+                "privacy_policy_audit": {"found": False, "http_status": 0},
+                "arco_channels_audit": {
+                    "found": False,
+                    "detected_emails": [],
+                    "has_explicit_arco_mention": False,
+                    "detected_terms": []
+                },
+                "consent_banner_audit": None,
+                "frames_audit": None,
+                "responsible_party_audit": None
+            }
 
         # 3. Motor de reglas y dictamen
         audit_result = RulesEngine.evaluate(scan_raw)

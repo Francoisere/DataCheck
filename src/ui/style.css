@@ -243,9 +243,23 @@ a { color: inherit; text-decoration: none; }
 .ticket-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
 .ticket-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
 .ticket-title .icon { color: var(--accent); }
+.ticket-actions { display: flex; align-items: center; gap: 8px; }
 .ticket code {
     padding: 2px 8px; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 12px;
     background: var(--surface); border: 1px solid var(--line); border-radius: 4px; overflow-wrap: anywhere;
+}
+.btn-copy-ticket {
+    display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; font-size: 12px; font-weight: 600;
+    color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 6px;
+    cursor: pointer; transition: all 0.2s ease;
+}
+.btn-copy-ticket:hover { background: var(--accent); color: #fff; }
+.btn-copy-ticket.copied { background: var(--ok); border-color: var(--ok); color: #fff; }
+.ticket-content {
+    margin-top: 10px; padding: 12px 14px; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    font-size: 12px; line-height: 1.5; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line); border-radius: 6px; white-space: pre-wrap; word-break: break-word;
+    max-height: 280px; overflow-y: auto;
 }
 .ticket p { margin-top: 8px; font-size: 14px; color: var(--body); }
 

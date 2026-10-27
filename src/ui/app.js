@@ -49,11 +49,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function toneOf(value) {
-    const v = String(value || "").toLowerCase();
-    // Primero los negativos: "no_cumple" también contiene "cumple"
-    if (/(^|[^a-z])no[_\s-]?cumple/.test(v) || v.includes("rech") || v.includes("falla") || v.includes("fail")) return "fail";
-    if (v.includes("aprob") || v.includes("cumple") || v === "ok") return "ok";
-    return "warn";
+        const v = String(value || "").toLowerCase();
+        if (v.includes("no_accesible") || v.includes("no accesible")) return "warn";
+        // Primero los negativos: "no_cumple" también contiene "cumple"
+        if (/(^|[^a-z])no[_\s-]?cumple/.test(v) || v.includes("rech") || v.includes("falla") || v.includes("fail")) return "fail";
+        if (v.includes("aprob") || v.includes("cumple") || v === "ok") return "ok";
+        return "warn";
     }
 
     /* ---------- Validación de la dirección ---------- */
@@ -598,10 +599,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     const ticket = f.remediation_ticket
                         ? `<div class="ticket">
                                <div class="ticket-head">
-                                   <p class="ticket-title">${icon("i-wrench", 16)}Cómo corregirlo</p>
-                                   ${f.technical_raw ? `<code>${esc(f.technical_raw)}</code>` : ""}
+                                   <p class="ticket-title">${icon("i-wrench", 16)}Instrucción Técnica de Remediación</p>
+                                   <div class="ticket-actions">
+                                       ${f.technical_raw ? `<code>${esc(f.technical_raw)}</code>` : ""}
+                                       <button type="button" class="btn-copy-ticket" title="Copiar instrucción de remediación al portapapeles">Copiar Instrucción</button>
+                                   </div>
                                </div>
-                               <p>${esc(f.remediation_ticket)}</p>
+                               <pre class="ticket-content"><code>${esc(f.remediation_ticket)}</code></pre>
                            </div>`
                         : "";
                     return `
@@ -893,6 +897,28 @@ document.addEventListener("DOMContentLoaded", () => {
             urlInput.value = btn.dataset.url;
             scan(btn.dataset.url);
         });
+    });
+
+    document.addEventListener("click", (e) => {
+        const copyBtn = e.target.closest(".btn-copy-ticket");
+        if (copyBtn) {
+            const ticketCard = copyBtn.closest(".ticket");
+            const codeEl = ticketCard ? ticketCard.querySelector(".ticket-content") : null;
+            const textToCopy = codeEl ? codeEl.innerText : "";
+            if (textToCopy) {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    const originalText = copyBtn.textContent;
+                    copyBtn.textContent = "¡Copiado!";
+                    copyBtn.classList.add("copied");
+                    setTimeout(() => {
+                        copyBtn.textContent = originalText;
+                        copyBtn.classList.remove("copied");
+                    }, 2000);
+                }).catch(() => {
+                    copyBtn.textContent = "Error al copiar";
+                });
+            }
+        }
     });
 
     btnPdf.addEventListener("click", downloadPdf);
