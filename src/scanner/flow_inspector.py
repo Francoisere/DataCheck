@@ -108,7 +108,17 @@ class FlowInspector:
                     ignore_https_errors=True,
                 )
 
+                # FB-01: Intercepción estricta para bloquear peticiones no-GET en flujos
+                async def block_non_get(route, request):
+                    if request.method != "GET":
+                        await route.abort("blockedbyclient")
+                    else:
+                        await route.continue_()
+
+                await context.route("**/*", block_non_get)
+
                 page: Page = await context.new_page()
+                await page.route("**/*", block_non_get)
 
                 stages_results: List[Dict[str, Any]] = []
                 cookies_seen_so_far: Set[str] = set()

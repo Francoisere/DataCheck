@@ -134,6 +134,7 @@ class PdfReportService:
             "APROBADO": ("#10B981", "#ECFDF5", "#065F46"),
             "CON_OBSERVACIONES": ("#F59E0B", "#FFFBEB", "#92400E"),
             "RECHAZADO": ("#EF4444", "#FEF2F2", "#991B1B"),
+            "NO_ACCESIBLE": ("#64748B", "#F1F5F9", "#334155"),
         }
         border_col, bg_col, text_col = verdict_colors.get(verdict, ("#64748B", "#F8FAFC", "#0F172A"))
 
@@ -453,3 +454,10 @@ class PdfReportService:
         doc.build(story)
         buffer.seek(0)
         return buffer
+
+    @classmethod
+    def generate_audit_pdf(cls, audit_data: Dict[str, Any]) -> bytes:
+        return cls.generate_pdf_report(audit_data).getvalue()
+
+
+PDFReportService = PdfReportService

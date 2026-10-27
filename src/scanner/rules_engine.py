@@ -1,12 +1,14 @@
 """
-Motor de Reglas de Cumplimiento Legal (Ley N° 19.628 y Nueva Ley de Protección de Datos Personales Chile).
-Incremento 2:
+Motor de Reglas de Cumplimiento Legal (Ley N° 19.628 y Nueva Ley de Protección de Datos Personales Chile N° 21.719).
+Incremento 2 + Mejoras de Primera Defensa (FB-02 / FB-04):
 - Ponderación de 100 pts: Política de Privacidad (35 pts), Canales ARCO (30 pts), Consentimiento & Cookies (35 pts).
-- Dictamen determinista: APROBADO (score >= 80 y 0 trackers), CON_OBSERVACIONES (score >= 55 o banner sin opción de rechazo), RECHAZADO (< 55 o trackers no autorizados con score bajo).
-- Generación sistemática de tickets técnicos de remediación (remediation_ticket) para desarrolladores (PBI-03 / RC-03).
+- Dictamen determinista: APROBADO (score >= 80 y 0 trackers), CON_OBSERVACIONES (score >= 55 o banner sin opción de rechazo),
+  RECHAZADO (< 55 o trackers no autorizados con score bajo), NO_ACCESIBLE (bloqueo WAF/HTTP 403/503/timeout).
+- Generación sistemática de tickets técnicos de remediación (remediation_ticket) con código accionable (FB-04).
 """
 
 from typing import Dict, Any, List
+from src.scanner.remediation_catalog import get_remediation_ticket
 
 LEGAL_DISCLAIMER = (
     "DataCheck.cl es una herramienta de auditoría técnica académica de apoyo. "
@@ -20,7 +22,65 @@ class RulesEngine:
     def evaluate(scan_raw_data: Dict[str, Any]) -> Dict[str, Any]:
         target_url = scan_raw_data.get("target_url", "")
         raw_page_status = scan_raw_data.get("page_load_status", 0)
+        error_msg = scan_raw_data.get("error_message", "")
+
+        # Validación de accesibilidad perimetral (FB-02 / D-01)
+        # Si la navegación inicial devuelve 0, 403, 503 o detecta bloqueo WAF/timeout,
+        # emitir estado neutro no sancionatorio NO_ACCESIBLE
         page_load_status = 1 if (isinstance(raw_page_status, int) and 200 <= raw_page_status < 400) else 0
+
+        if page_load_status == 0 or raw_page_status in (0, 403, 503) or error_msg in ("BLOQUEO_WAF_ANTIBOT", "TIMEOUT_EXCEDIDO"):
+            is_waf = error_msg == "BLOQUEO_WAF_ANTIBOT" or raw_page_status in (403, 503)
+            return {
+                "target_url": target_url,
+                "page_load_status": 0,
+                "verdict": "NO_ACCESIBLE",
+                "score": 0,
+                "verdict_summary": (
+                    "Sitio no accesible para análisis técnico pasivo (Bloqueo WAF / Cortafuegos perimetral)."
+                    if is_waf else
+                    "Sitio no accesible para análisis técnico pasivo."
+                ),
+                "pilares": {
+                    "politica_privacidad": {
+                        "status": "FALLA",
+                        "score": 0,
+                        "max_score": 35
+                    },
+                    "canales_arco": {
+                        "status": "FALLA",
+                        "score": 0,
+                        "max_score": 30
+                    },
+                    "consentimiento_cookies": {
+                        "status": "FALLA",
+                        "score": 0,
+                        "max_score": 35
+                    }
+                },
+                "findings": [
+                    {
+                        "pilar": "ACCESIBILIDAD_PERIMETRAL",
+                        "status": "WARNING",
+                        "title": "Inspección Externa Bloqueada" if is_waf else "Inspección Externa No Disponible",
+                        "detail": (
+                            "El sitio web cuenta con un firewall de aplicaciones web (WAF) que impidió la auditoría pasiva."
+                            if is_waf else
+                            "No fue posible conectar con el sitio dentro del tiempo límite o el servidor no respondió adecuadamente."
+                        ),
+                        "technical_raw": f"HTTP {raw_page_status} - {error_msg or 'Sin respuesta'}",
+                        "remediation_ticket": get_remediation_ticket(
+                            "WAF_PERIMETRAL_BLOCK",
+                            f"HTTP {raw_page_status} / {error_msg or 'Bloqueo WAF/Timeout'}"
+                        )
+                    }
+                ],
+                "technical_raw": scan_raw_data,
+                "consent_banner_audit": None,
+                "frames_audit": None,
+                "responsible_party_audit": None,
+                "legal_disclaimer": LEGAL_DISCLAIMER
+            }
 
         tracker_audit = scan_raw_data.get("tracker_audit", {})
         privacy_audit = scan_raw_data.get("privacy_policy_audit", {})
@@ -46,7 +106,7 @@ class RulesEngine:
                 "title": "Política de Privacidad Accesible",
                 "detail": f"Enlace a la política detectado en {privacy_audit.get('url')} respondiendo con código HTTP 200.",
                 "technical_raw": f"HTTP {privacy_audit.get('http_status')} - {privacy_audit.get('url')}",
-                "remediation_ticket": "Mantener la visibilidad y accesibilidad directa del enlace en el footer institucional."
+                "remediation_ticket": get_remediation_ticket("POLICY_MISSING_OR_BROKEN", "Ruta activa verificada con HTTP 200.")
             })
 
             if privacy_audit.get("has_mandatory_keywords"):
@@ -58,7 +118,7 @@ class RulesEngine:
                     "title": "Contenido Normativo Mínimo Verificado",
                     "detail": f"Se detectaron términos esenciales exigidos por la ley: {found_kws}.",
                     "technical_raw": found_kws,
-                    "remediation_ticket": "Verificar periódicamente la vigencia de las finalidades y la identificación del responsable del tratamiento."
+                    "remediation_ticket": get_remediation_ticket("POLICY_INCOMPLETE", "Contenido normativo verificado.")
                 })
             else:
                 missing_kws = ", ".join(privacy_audit.get("missing_keywords", []))
@@ -68,7 +128,7 @@ class RulesEngine:
                     "title": "Texto Normativo Incompleto o Genérico",
                     "detail": f"El documento omite cláusulas esenciales requeridas: {missing_kws}.",
                     "technical_raw": f"Faltantes: {missing_kws}",
-                    "remediation_ticket": "Actualizar el documento de política incorporando secciones explícitas de: identificación del responsable, finalidades del tratamiento y derechos de los titulares."
+                    "remediation_ticket": get_remediation_ticket("POLICY_INCOMPLETE", f"Cláusulas faltantes: {missing_kws}")
                 })
 
             # Sub-evaluación Art. 14 ter (letras b y c): Transparencia del Responsable y Canales de Notificación
@@ -114,7 +174,7 @@ class RulesEngine:
                         "title": "Identificación del Responsable y Canales de Notificación (Art. 14 ter)",
                         "detail": f"El responsable individualiza su identidad ({ident_summary}), canal de atención ({channels_summary}) y estado de DPO ({dpo_str}) conforme al Art. 14 ter literales b y c.",
                         "technical_raw": f"Entidad: {ident_summary} | Canales: {channels_summary} | DPO: {dpo_str}"[:500],
-                        "remediation_ticket": "Mantener al día la designación del encargado de prevención (DPO) y los canales de notificación habilitados.",
+                        "remediation_ticket": get_remediation_ticket("POLICY_INCOMPLETE", "Art. 14 ter Ley 21.719 - Mantener al día la designación del DPO y canales habilitados."),
                         "legal_basis_key": "POLITICA_PRIVACIDAD_ART14TER_OK"
                     })
                 else:
@@ -124,7 +184,7 @@ class RulesEngine:
                         "title": "Omisión de Deberes de Información del Responsable (Art. 14 ter)",
                         "detail": "La política de privacidad o la página pública no individualiza con claridad el RUT/Razón Social, representante legal o carece de canales idóneos de notificación (Art. 14 ter b y c).",
                         "technical_raw": f"Canales detectados: {channels_str} | DPO: {dpo_str} | Identificación: {ident_str}"[:500],
-                        "remediation_ticket": "Incorporar en el pie de página (footer) o en la sección inicial de la Política de Privacidad la individualización legal del responsable (Razón Social y RUT), el nombre o cargo del Representante Legal/DPO, y un correo de contacto o formulario directo dedicado a la recepción de solicitudes de derechos titulares (Art. 14 ter Ley 21.719).",
+                        "remediation_ticket": get_remediation_ticket("POLICY_INCOMPLETE", "Art. 14 ter Ley 21.719 - Incorporar en el pie de página (footer) o en la sección inicial de la Política de Privacidad la individualización legal del responsable (Razón Social y RUT), el nombre o cargo del Representante Legal/DPO, y un correo de contacto o formulario directo dedicado a la recepción de solicitudes de derechos titulares."),
                         "legal_basis_key": "POLITICA_PRIVACIDAD_ART14TER_WARNING"
                     })
             elif privacy_audit.get("has_mandatory_keywords"):
@@ -139,7 +199,7 @@ class RulesEngine:
                 "title": "Ausencia o Inaccesibilidad de Política de Privacidad",
                 "detail": "No se localizó un enlace visible o la URL de privacidad retornó un código de error HTTP.",
                 "technical_raw": f"HTTP {privacy_audit.get('http_status', 'No encontrado')}",
-                "remediation_ticket": "Publicar la Política de Privacidad en una URL pública accesible (HTTP 200) y enlazarla de forma persistente en el pie de página (footer) de todo el sitio."
+                "remediation_ticket": get_remediation_ticket("POLICY_MISSING_OR_BROKEN", f"HTTP {privacy_audit.get('http_status', 'No encontrado')}")
             })
 
         score += pilar_privacy_score
@@ -163,7 +223,7 @@ class RulesEngine:
                     "title": "Canal de Contacto Directo Detectado",
                     "detail": f"Canal de correo formal disponible para titulares: {emails_str}.",
                     "technical_raw": emails_str,
-                    "remediation_ticket": "Asegurar que el buzón de correo cuente con protocolo de respuesta dentro de los plazos legales establecidos."
+                    "remediation_ticket": get_remediation_ticket("ARCO_INCOMPLETE", f"Buzón formal detectado: {emails_str}. Asegurar protocolo dentro de plazos legales (15 días hábiles).")
                 })
 
             if has_explicit:
@@ -175,7 +235,7 @@ class RulesEngine:
                     "title": "Mención Explícita a Derechos ARCO",
                     "detail": f"El sitio informa expresamente sobre derechos de Acceso, Rectificación, Cancelación u Oposición: {terms_str}.",
                     "technical_raw": terms_str,
-                    "remediation_ticket": "Mantener publicado el procedimiento paso a paso para el ejercicio de cada derecho ARCO."
+                    "remediation_ticket": get_remediation_ticket("ARCO_INCOMPLETE", f"Derechos identificados: {terms_str}. Mantener publicado procedimiento paso a paso.")
                 })
             elif len(arco_audit.get("detected_terms", [])) > 0:
                 pilar_arco_score += 5
@@ -186,7 +246,7 @@ class RulesEngine:
                     "title": "Mención Parcial de Derechos del Titular",
                     "detail": f"Se identificaron términos generales ({terms_str}) pero sin mención exhaustiva de los derechos ARCO.",
                     "technical_raw": terms_str,
-                    "remediation_ticket": "Detallar expresamente en la política los derechos de Acceso, Rectificación, Cancelación y Oposición según la Ley N° 19.628."
+                    "remediation_ticket": get_remediation_ticket("ARCO_INCOMPLETE", f"Términos parciales: {terms_str}. Detallar expresamente Acceso, Rectificación, Cancelación y Oposición.")
                 })
 
             arco_status = "CUMPLE" if pilar_arco_score >= 25 else "OBSERVACION"
@@ -197,7 +257,7 @@ class RulesEngine:
                 "title": "Sin Canales Formales para Ejercicio de Derechos ARCO",
                 "detail": "No se detectaron correos ni mecanismos claros para que el titular gestione sus derechos de datos personales.",
                 "technical_raw": "0 canales identificados",
-                "remediation_ticket": "Habilitar un canal de comunicación directo (ej: privacidad@dominio.cl o formulario web dedicado) e indicarlo claramente en la política."
+                "remediation_ticket": get_remediation_ticket("ARCO_MISSING", "0 canales formales detectados.")
             })
 
         score += pilar_arco_score
@@ -254,7 +314,7 @@ class RulesEngine:
                 "title": "Navegación Limpia Previa al Consentimiento",
                 "detail": "No se detectó inyección de cookies de terceros ni solicitudes salientes hacia dominios de rastreo publicitario previo a la interacción del usuario.",
                 "technical_raw": "0 trackers activos pre-consentimiento",
-                "remediation_ticket": "Mantener el bloqueo preventivo por defecto (opt-in) de todos los scripts de analítica y publicidad."
+                "remediation_ticket": get_remediation_ticket("TRACKER_UNAUTHORIZED", "Navegación conforme: Mantener bloqueo preventivo por defecto (opt-in).")
             })
         else:
             pilar_consent_score = 0
@@ -266,10 +326,7 @@ class RulesEngine:
                     "title": "Inyección no autorizada de rastreador externo",
                     "detail": f"Petición saliente interceptada hacia dominio de rastreo: '{domain}' antes de recibir consentimiento explícito.",
                     "technical_raw": domain,
-                    "remediation_ticket": (
-                        f"Condicionar la carga y ejecución de los scripts asociados a '{domain}' "
-                        f"(ej. vía Google Tag Manager o gestor de consentimiento CMP) al evento de aceptación explícita del usuario."
-                    )
+                    "remediation_ticket": get_remediation_ticket("TRACKER_UNAUTHORIZED", f"Dominio de rastreo externo no autorizado: '{domain}'")
                 })
 
             for cookie in detected_cookies:
@@ -279,10 +336,7 @@ class RulesEngine:
                     "title": "Depósito no autorizado de cookie de rastreo",
                     "detail": f"Cookie no esencial '{cookie}' depositada en el navegador previo a la interacción del usuario.",
                     "technical_raw": cookie,
-                    "remediation_ticket": (
-                        f"Configurar la cookie '{cookie}' para que solo se almacene tras la confirmación de consentimiento, "
-                        f"bloqueando su emisión en la respuesta inicial HTTP Set-Cookie o script local."
-                    )
+                    "remediation_ticket": get_remediation_ticket("COOKIE_UNAUTHORIZED", f"Cookie no esencial no autorizada: '{cookie}'")
                 })
 
         # Hallazgos de auditoría de banner de consentimiento
@@ -298,9 +352,9 @@ class RulesEngine:
                     "no verificables de forma pasiva, sin aplicar penalización de puntaje al no registrarse transferencias no consentidas."
                 ),
                 "technical_raw": f"CMP: {cmp_provider or 'Genérico'} | Shadow DOM: closed | Verificable: False",
-                "remediation_ticket": (
-                    "Asegurar que los mecanismos de consentimiento provean interfaces accesibles para verificación técnica "
-                    "y auditoría de cumplimiento normativo."
+                "remediation_ticket": get_remediation_ticket(
+                    "BANNER_NO_REJECT",
+                    "Shadow DOM Cerrado: Asegurar interfaces accesibles para auditoría y verificación técnica."
                 )
             })
         elif banner_detected and not has_reject_option:
@@ -323,10 +377,7 @@ class RulesEngine:
                         "lo cual no es accesible bajo el principio de inspección pasiva estricta (DA-01) al requerir clics activos."
                     ),
                     "technical_raw": tech_raw,
-                    "remediation_ticket": (
-                        "Incorporar en el primer nivel del banner un botón explícito de rechazo (ej. 'Rechazar todo' o 'Solo necesarias') "
-                        "al mismo nivel y simetría que el botón de aceptación, evitando forzar al titular a ingresar a paneles secundarios de configuración."
-                    )
+                    "remediation_ticket": get_remediation_ticket("BANNER_NO_REJECT", f"Banner 2 pasos ({tech_raw}): Incorporar botón 'Rechazar todo' en primer nivel.")
                 })
             else:
                 findings.append({
@@ -338,11 +389,7 @@ class RulesEngine:
                         "real y accesible para que el titular pueda rechazar o configurar cookies no esenciales."
                     ),
                     "technical_raw": tech_raw,
-                    "remediation_ticket": (
-                        "Implementar en el banner una opción visible y simétrica para rechazar cookies no esenciales "
-                        "(ej. botón 'Rechazar todas' o panel de configuración granular) al mismo nivel visual que el botón "
-                        "de aceptación, conforme a las exigencias del Roadmap y la Ley N° 19.628."
-                    )
+                    "remediation_ticket": get_remediation_ticket("BANNER_NO_REJECT", tech_raw)
                 })
         elif banner_detected and has_reject_option:
             tech_raw = f"CMP: {cmp_provider} - Opción de rechazo verificada" if cmp_provider else "Banner con opción de rechazo"
@@ -357,10 +404,7 @@ class RulesEngine:
                     "y simétricos al usuario, incluyendo la opción explícita de rechazar cookies."
                 ),
                 "technical_raw": tech_raw,
-                "remediation_ticket": (
-                    "Mantener la vigencia de los controles del banner de consentimiento y asegurar la simetría "
-                    "entre las acciones de aceptar y rechazar."
-                )
+                "remediation_ticket": get_remediation_ticket("BANNER_NO_REJECT", "Opción de rechazo verificada conforme a Ley 21.719.")
             })
         elif not banner_detected and has_unauthorized:
             findings.append({
@@ -372,10 +416,7 @@ class RulesEngine:
                     "un banner o mecanismo previo para recabar el consentimiento del usuario."
                 ),
                 "technical_raw": "0 mecanismos de consentimiento detectados",
-                "remediation_ticket": (
-                    "Implementar de forma urgente una plataforma de gestión de consentimiento (CMP) o banner "
-                    "con bloqueo preventivo (opt-in) que impida la activación de scripts de rastreo antes de la decisión del usuario."
-                )
+                "remediation_ticket": get_remediation_ticket("BANNER_NO_REJECT", "Ausencia total de banner con trackers activos.")
             })
 
         # Hallazgo de evaluación de bloqueo preventivo (pre-consentimiento)
@@ -390,7 +431,7 @@ class RulesEngine:
                         "de terceros antes de la decisión del usuario."
                     ),
                     "technical_raw": f"CMP: {cmp_provider or 'Genérico'} | Bloqueo preventivo: Activo",
-                    "remediation_ticket": "Mantener la configuración de opt-in por defecto para toda nueva etiqueta de rastreo o analítica."
+                    "remediation_ticket": get_remediation_ticket("TRACKER_UNAUTHORIZED", "Bloqueo preventivo activo y conforme.")
                 })
             else:
                 findings.append({
@@ -405,10 +446,7 @@ class RulesEngine:
                         f"CMP: {cmp_provider or 'Genérico'} | Trackers detectados pre-consentimiento: "
                         f"{len(detected_domains)} dominios, {len(detected_cookies)} cookies"
                     ),
-                    "remediation_ticket": (
-                        "Configurar el gestor de consentimiento para que no dispare tags publicitarios ni analíticos "
-                        "hasta recibir consentimiento explícito afirmativo."
-                    )
+                    "remediation_ticket": get_remediation_ticket("TRACKER_UNAUTHORIZED", "Falla en bloqueo previo: configurar CMP en modo estricto.")
                 })
 
         score += pilar_consent_score

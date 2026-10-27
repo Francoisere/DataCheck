@@ -21,6 +21,18 @@ class LegalCitation(BaseModel):
 
 # Catálogo determinista indexado por pilar y condición
 LEGAL_CATALOG: Dict[str, LegalCitation] = {
+    "ACCESIBILIDAD_PERIMETRAL_WARNING": LegalCitation(
+        pilar="ACCESIBILIDAD_PERIMETRAL",
+        articulo_ley="Art. 11 (Principio de Transparencia y Accesibilidad) - Ley 21.719",
+        principio_vulnerado="Principio de Transparencia y Cooperación Técnica",
+        descripcion_normativa=(
+            "El sitio web dispone de medidas perimetrales (WAF/Anti-bot) o latencia de red que limitan "
+            "la inspección técnica pasiva automatizada. No constituye infracción directa de privacidad."
+        ),
+        severidad_apdp="Informativa / Neutra",
+        sancion_estimada="Sin sanción aplicable (Dictamen Neutro NO_ACCESIBLE).",
+        remediation_guide="Habilitar el User-Agent institucional de DataCheck o verificar en entorno asistido."
+    ),
     "CONSENTIMIENTO_COOKIES_FAIL": LegalCitation(
         pilar="CONSENTIMIENTO_COOKIES",
         articulo_ley="Art. 12 (Principio de Licitud) y Art. 14 (Consentimiento Expreso e Informado) - Ley 21.719",

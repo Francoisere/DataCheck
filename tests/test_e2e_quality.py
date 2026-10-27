@@ -159,7 +159,7 @@ async def test_ec05_waf_bloqueo_403_sin_error_500():
             assert res.status_code == 200
             data = res.json()
             assert data["page_load_status"] == 0
-            assert data["verdict"] == "RECHAZADO"
+            assert data["verdict"] == "NO_ACCESIBLE"
 
 
 @pytest.mark.asyncio

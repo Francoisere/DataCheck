@@ -32,6 +32,10 @@ async def run_scan_post(
 
     try:
         return await audit_service.execute_audit(raw_url=url, db_session=db)
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error durante el escaneo: {str(e)}")
 
@@ -50,5 +54,9 @@ async def run_scan_get(
 
     try:
         return await audit_service.execute_audit(raw_url=cleaned_url, db_session=db)
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error durante el escaneo: {str(e)}")
