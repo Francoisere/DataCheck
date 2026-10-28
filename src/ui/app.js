@@ -651,9 +651,17 @@ document.addEventListener("DOMContentLoaded", () => {
         if (data.verdict === "RECHAZADO" || data.verdict === "CON_OBSERVACIONES") {
             scheduleCard.hidden = false;
             scheduleSuccess.hidden = true;
-            scheduleError.hidden = true;
             scheduleForm.hidden = false;
             setScheduleBusy(false);
+
+            if (!data.audit_id) {
+                scheduleError.textContent = "Aviso: La auditoría se ejecutó en modo sin persistencia (la base de datos no devolvió un ID), por lo que no es posible calendarizar una re-auditoría automática. Por favor reintenta el escaneo.";
+                scheduleError.hidden = false;
+                btnSchedule.disabled = true;
+            } else {
+                scheduleError.hidden = true;
+                btnSchedule.disabled = false;
+            }
         } else {
             scheduleCard.hidden = true;
         }
@@ -670,6 +678,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (flowSec) flowSec.hidden = false;
         if ($("consent-section")) $("consent-section").hidden = true;
         if ($("responsible-section")) $("responsible-section").hidden = true;
+        if (scheduleCard) scheduleCard.hidden = true;
         lastReport = data;
         if (btnPdf) btnPdf.disabled = false;
         pdfError.hidden = true;
@@ -835,7 +844,7 @@ document.addEventListener("DOMContentLoaded", () => {
         scheduleSuccess.hidden = true;
 
         if (!lastReport || !lastReport.audit_id) {
-            scheduleError.textContent = "No se puede programar sin un ID de auditoría guardado.";
+            scheduleError.textContent = "No se puede programar: la auditoría actual no posee un ID de registro guardado en la base de datos (PostgreSQL).";
             scheduleError.hidden = false;
             return;
         }
