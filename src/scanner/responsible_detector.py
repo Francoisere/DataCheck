@@ -143,7 +143,7 @@ class ResponsiblePartyDetector:
         # 2. Literal c: Canales de atención y notificación
         contact_channels: List[str] = []
 
-        # Correo electrónico
+        # Correo electrónico general
         emails = EMAIL_REGEX.findall(combined_text)
         valid_emails = [
             e for e in emails
@@ -160,6 +160,67 @@ class ResponsiblePartyDetector:
                 if any(k in e.lower() for k in ["privacidad", "contacto", "dpo", "legal", "atencion", "info"])
             ]
             contact_email = prio_emails[0] if prio_emails else valid_emails[0]
+
+        # Búsqueda de email asociado específicamente al contexto de DPO (ej. párrafo con "delegado" o "dpo" + email)
+        dpo_email: Optional[str] = None
+
+        def _is_valid_email(e: str) -> bool:
+            e_lower = e.lower()
+            return (
+                not e_lower.endswith((".png", ".jpg", ".svg", ".webp", ".gif"))
+                and "example" not in e_lower
+                and "domain" not in e_lower
+            )
+
+        # a) Búsqueda en bloques de etiquetas del DOM (p, li, div, td, etc.)
+        if soup:
+            for elem in soup.find_all(["p", "li", "div", "td", "span", "dd", "section"]):
+                elem_text = elem.get_text(separator=" ", strip=True)
+                elem_lower = elem_text.lower()
+                if any(kw in elem_lower for kw in DPO_KEYWORDS):
+                    elem_emails = [e for e in EMAIL_REGEX.findall(elem_text) if _is_valid_email(e)]
+                    if elem_emails:
+                        dpo_email = elem_emails[0]
+                        dpo_found = True
+                        break
+
+        # b) Búsqueda en párrafos o líneas del texto combinado
+        if not dpo_email:
+            text_blocks = [b.strip() for b in re.split(r'[\r\n]+', combined_text) if b.strip()]
+            for block in text_blocks:
+                block_lower = block.lower()
+                if any(kw in block_lower for kw in DPO_KEYWORDS):
+                    block_emails = [e for e in EMAIL_REGEX.findall(block) if _is_valid_email(e)]
+                    if block_emails:
+                        dpo_email = block_emails[0]
+                        dpo_found = True
+                        break
+
+        # c) Búsqueda por proximidad (ventana de 250 caracteres alrededor de mención DPO)
+        if not dpo_email and dpo_found:
+            for kw in DPO_KEYWORDS:
+                for match in re.finditer(re.escape(kw), text_lower):
+                    start = max(0, match.start() - 250)
+                    end = min(len(combined_text), match.end() + 250)
+                    window_text = combined_text[start:end]
+                    win_emails = [e for e in EMAIL_REGEX.findall(window_text) if _is_valid_email(e)]
+                    if win_emails:
+                        dpo_email = win_emails[0]
+                        break
+                if dpo_email:
+                    break
+
+        # d) Correo con identificador explícito de DPO (ej. dpo@empresa.cl, delegado@empresa.cl)
+        if not dpo_email and valid_emails:
+            dpo_named = [e for e in valid_emails if any(p in e.lower() for p in ["dpo@", "delegado@", "oficial.privacidad@"])]
+            if dpo_named:
+                dpo_email = dpo_named[0]
+                dpo_found = True
+
+        if dpo_email and "email" not in contact_channels:
+            contact_channels.append("email")
+            if not contact_email:
+                contact_email = dpo_email
 
         # Formulario de contacto en DOM o enlaces internos/externos
         has_form_or_link = False
@@ -224,5 +285,6 @@ class ResponsiblePartyDetector:
             "corporate_name": corporate_name,
             "detected_rut": detected_rut,
             "contact_email": contact_email,
-            "postal_address": postal_address
+            "postal_address": postal_address,
+            "dpo_email": dpo_email
         }

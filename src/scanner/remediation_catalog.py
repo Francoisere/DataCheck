@@ -90,31 +90,31 @@ async def privacy_policy():
     },
 
     # -------------------------------------------------------------------------
-    # 3. CANALES PARA EJERCICIO DE DERECHOS ARCO (Art. 14 ter letra c / RF-03)
+    # 3. CANALES PARA EJERCICIO DE DERECHOS ARCOP + BLOQUEO (Art. 14 ter letra c / RF-03)
     # -------------------------------------------------------------------------
     "ARCO_MISSING": {
         "ticket_id": "TICK-ARC-01",
-        "title": "Habilitar canal directo para derechos ARCO (mailto / formulario)",
-        "summary": "Proveer una vía formal y visible para la recepción de solicitudes de Acceso, Rectificación, Cancelación y Oposición.",
+        "title": "Habilitar canal directo para derechos ARCOP + Bloqueo (mailto / formulario)",
+        "summary": "Proveer una vía formal y visible para la recepción de solicitudes de Acceso, Rectificación, Supresión, Oposición, Portabilidad y Bloqueo.",
         "directive": "Incorporar en el footer o en la sección de contacto un enlace 'mailto:' dedicado o un formulario web accesible sin autenticación forzada.",
-        "code_snippet": """<!-- Bloque HTML para footer con canal ARCO (HTML5) -->
+        "code_snippet": """<!-- Bloque HTML para footer con canal ARCOP + Bloqueo (HTML5) -->
 <div class="arco-contact-channel">
-  <h4>Ejercicio de Derechos de Datos Personales</h4>
+  <h4>Ejercicio de Derechos de Datos Personales (ARCOP + Bloqueo)</h4>
   <p>De acuerdo con la Ley N° 19.628 / 21.719, usted puede solicitar el acceso, rectificación, 
-     cancelación u oposición de sus datos personales a través de nuestro canal formal:</p>
-  <a href="mailto:privacidad@dominio.cl?subject=Solicitud%20Derechos%20ARCO" class="btn-arco">
+     supresión, oposición, portabilidad y bloqueo de sus datos personales a través de nuestro canal formal:</p>
+  <a href="mailto:privacidad@dominio.cl?subject=Solicitud%20Derechos%20ARCOP" class="btn-arco">
     📧 privacidad@dominio.cl
   </a>
 </div>"""
     },
     "ARCO_INCOMPLETE": {
         "ticket_id": "TICK-ARC-02",
-        "title": "Detallar procedimiento formal de atención de derechos ARCO",
+        "title": "Detallar procedimiento formal de atención de derechos ARCOP + Bloqueo",
         "summary": "Especificar en la política los plazos legales y requisitos para acreditar titularidad.",
         "directive": "Añadir a la política el protocolo que describa los requisitos del trámite: presentación de solicitud, plazo máximo de respuesta legal (15 días hábiles) y gratuidad del ejercicio.",
-        "code_snippet": """// Protocolo de atención ARCO para documentar en la Política:
+        "code_snippet": """// Protocolo de atención ARCOP + Bloqueo para documentar en la Política:
 // 1. Canal de recepción: privacidad@dominio.cl
-// 2. Información requerida: Nombre completo, RUT y derecho que desea ejercer (A, R, C u O).
+// 2. Información requerida: Nombre completo, RUT y derecho que desea ejercer (A, R, S, O, P o Bloqueo).
 // 3. Plazo máximo de resolución y respuesta: 15 días hábiles conforme a la Ley N° 21.719.
 // 4. Costo: Procedimiento 100% gratuito para el titular."""
     },

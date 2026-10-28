@@ -21,16 +21,16 @@ Para dar cumplimiento formal al requerimiento **FB-06** y validar que la tasa de
 
 | N° | Sitio Web Auditado | Sector / Industria | Inspección Manual (Gold Standard) | Dictamen DataCheck.cl | Score / 100 | Concordancia | Observaciones Técnicas |
 |:---:|---|---|---|---|:---:|:---:|---|
-| **1** | `https://gob.cl` | Gobierno Central | Conforme (Sin trackers pre-consentimiento, política visible) | **APROBADO** | **85** |  Coincide | Sitio institucional sin cookies de marketing de terceros. |
-| **2** | `https://chileatiende.gob.cl` | Servicios Públicos | Parcial (Política presente, sin trackers, ARCO genérico) | **CON_OBSERVACIONES** | **65** |  Coincide | Mención de derechos generales sin desglose exhaustivo ARCO. |
-| **3** | `https://www.bancochile.cl` | Banca / Financiero | WAF Cloudflare / Incapsula activo ante bots | **NO_ACCESIBLE** | **0** |  Coincide | El sistema reporta correctamente bloqueo perimetral sin penalizar falsamente. |
-| **4** | `https://www.falabella.com` | Retail / E-commerce | No Conforme (Trackers activos _ga, Google Ads pre-consentimiento) | **RECHAZADO** | **35** |  Coincide | Disparo de analítica antes de interacción del usuario. |
-| **5** | `https://www.paris.cl` | Retail / E-commerce | No Conforme (Carga Meta Pixel y Criteo antes de consentimiento) | **RECHAZADO** | **30** |  Coincide | Falla en bloqueo preventivo de cookies de marketing. |
-| **6** | `https://www.emol.com` | Prensa / Medios | No Conforme (Inyección masiva de scripts de adtech y SSPs) | **RECHAZADO** | **25** |  Coincide | 12 dominios de rastreo publicitario activos en la carga inicial. |
-| **7** | `https://www.latercera.com` | Prensa / Medios | No Conforme (Google Analytics y Chartbeat previo a opt-in) | **RECHAZADO** | **30** |  Coincide | Banner puramente informativo sin botón de rechazo simétrico. |
-| **8** | `https://www.sii.cl` | Institución Pública | Conforme (Cookies estrictamente técnicas, sin rastreo comercial) | **APROBADO** | **85** |  Coincide | Cumplimiento estricto de finalidades institucionales. |
-| **9** | `https://www.uchile.cl` | Educación Superior | Parcial (Política institucional presente, sin trackers de terceros) | **CON_OBSERVACIONES** | **70** |  Coincide | Canal ARCO no estructurado como casilla de privacidad dedicada. |
-| **10** | `https://www.mercadolibre.cl` | Marketplace | No Conforme (Cookies de perfilamiento previo a la interacción) | **RECHAZADO** | **35** |  Coincide | Ausencia de bloqueo preventivo por defecto (opt-in). |
+| **1** | `https://gob.cl/` | Gobierno Central | Conforme (Sin trackers pre-consentimiento, política visible) | **NO_ACCESIBLE** | **0** |  Discrepancia | Sitio institucional sin cookies de marketing de terceros. |
+| **2** | `https://chileatiende.gob.cl/` | Servicios Públicos | Parcial (Política presente, sin trackers, ARCO genérico) | **RECHAZADO** | **40** |  Discrepancia | Mención de derechos generales sin desglose exhaustivo ARCO. |
+| **3** | `https://www.bancochile.cl/` | Banca / Financiero | WAF Cloudflare / Incapsula activo ante bots | **RECHAZADO** | **65** |  Discrepancia | El sistema reporta correctamente bloqueo perimetral sin penalizar falsamente. |
+| **4** | `https://www.falabella.com/` | Retail / E-commerce | No Conforme (Trackers activos _ga, Google Ads pre-consentimiento) | **RECHAZADO** | **50** |  Coincide | Disparo de analítica antes de interacción del usuario. |
+| **5** | `https://www.paris.cl/` | Retail / E-commerce | No Conforme (Carga Meta Pixel y Criteo antes de consentimiento) | **RECHAZADO** | **55** |  Coincide | Falla en bloqueo preventivo de cookies de marketing. |
+| **6** | `https://www.emol.com/` | Prensa / Medios | No Conforme (Inyección masiva de scripts de adtech y SSPs) | **RECHAZADO** | **65** |  Coincide | 12 dominios de rastreo publicitario activos en la carga inicial. |
+| **7** | `https://www.latercera.com/` | Prensa / Medios | No Conforme (Google Analytics y Chartbeat previo a opt-in) | **RECHAZADO** | **40** |  Coincide | Banner puramente informativo sin botón de rechazo simétrico. |
+| **8** | `https://www.sii.cl/` | Institución Pública | Conforme (Cookies estrictamente técnicas, sin rastreo comercial) | **CON_OBSERVACIONES** | **75** |  Discrepancia | Cumplimiento estricto de finalidades institucionales. |
+| **9** | `https://www.uchile.cl/` | Educación Superior | Parcial (Política institucional presente, sin trackers de terceros) | **RECHAZADO** | **40** |  Discrepancia | Canal ARCO no estructurado como casilla de privacidad dedicada. |
+| **10** | `https://www.mercadolibre.cl/` | Marketplace | No Conforme (Cookies de perfilamiento previo a la interacción) | **RECHAZADO** | **50** |  Coincide | Ausencia de bloqueo preventivo por defecto (opt-in). |
 
 ---
 

@@ -35,7 +35,7 @@ LEGAL_CATALOG: Dict[str, LegalCitation] = {
     ),
     "CONSENTIMIENTO_COOKIES_FAIL": LegalCitation(
         pilar="CONSENTIMIENTO_COOKIES",
-        articulo_ley="Art. 12 (Principio de Licitud) y Art. 14 (Consentimiento Expreso e Informado) - Ley 21.719",
+        articulo_ley="Art. 12 (Bases de Licitud del Tratamiento) - Ley 21.719",
         principio_vulnerado="Principio de Licitud y Autodeterminación Informativa",
         descripcion_normativa=(
             "Todo tratamiento de datos personales obtenido mediante identificadores de navegación "
@@ -51,7 +51,7 @@ LEGAL_CATALOG: Dict[str, LegalCitation] = {
     ),
     "CONSENTIMIENTO_COOKIES_OK": LegalCitation(
         pilar="CONSENTIMIENTO_COOKIES",
-        articulo_ley="Art. 12 y Art. 14 - Ley 21.719",
+        articulo_ley="Art. 12 (Bases de Licitud del Tratamiento) - Ley 21.719",
         principio_vulnerado="Ninguno (Conforme)",
         descripcion_normativa=(
             "El sitio respeta el consentimiento previo, no activando rastreadores de terceros "
@@ -63,7 +63,7 @@ LEGAL_CATALOG: Dict[str, LegalCitation] = {
     ),
     "POLITICA_PRIVACIDAD_FAIL": LegalCitation(
         pilar="POLITICA_PRIVACIDAD",
-        articulo_ley="Art. 11 (Principio de Transparencia e Información) - Ley 21.719 / Art. 19 N° 4 Const.",
+        articulo_ley="Art. 14 ter (Obligación de Transparencia e Información) y Art. 11 (Principio de Transparencia) - Ley 21.719 / Art. 19 N° 4 Const.",
         principio_vulnerado="Principio de Transparencia y Lealtad",
         descripcion_normativa=(
             "El responsable del tratamiento tiene la obligación legal de proporcionar a los titulares información "
@@ -79,7 +79,7 @@ LEGAL_CATALOG: Dict[str, LegalCitation] = {
     ),
     "POLITICA_PRIVACIDAD_WARNING": LegalCitation(
         pilar="POLITICA_PRIVACIDAD",
-        articulo_ley="Art. 11 (Deber de Información Detallada) - Ley 21.719",
+        articulo_ley="Art. 14 ter (Obligación de Transparencia e Información) y Art. 11 (Deber de Información Detallada) - Ley 21.719",
         principio_vulnerado="Principio de Transparencia Cualificada",
         descripcion_normativa=(
             "La política contiene formulaciones vagas o genéricas que omiten menciones obligatorias "
@@ -94,7 +94,7 @@ LEGAL_CATALOG: Dict[str, LegalCitation] = {
     ),
     "POLITICA_PRIVACIDAD_OK": LegalCitation(
         pilar="POLITICA_PRIVACIDAD",
-        articulo_ley="Art. 11 - Ley 21.719",
+        articulo_ley="Art. 14 ter y Art. 11 - Ley 21.719",
         principio_vulnerado="Ninguno (Conforme)",
         descripcion_normativa="La política de privacidad se encuentra disponible, accesible públicamente y contiene cláusulas normativas esenciales.",
         severidad_apdp="Conforme",
@@ -131,37 +131,37 @@ LEGAL_CATALOG: Dict[str, LegalCitation] = {
     ),
     "CANALES_ARCO_FAIL": LegalCitation(
         pilar="CANALES_ARCO",
-        articulo_ley="Arts. 19 a 24 (Ejercicio de Derechos de Acceso, Rectificación, Cancelación y Oposición) - Ley 21.719 / Ley 19.628",
+        articulo_ley="Arts. 19 a 24 (Ejercicio de Derechos ARCOP + Bloqueo: Acceso, Rectificación, Supresión, Oposición, Portabilidad y Bloqueo) - Ley 21.719 / Ley 19.628",
         principio_vulnerado="Derecho a la Autodeterminación Informativa y Tutela Efectiva",
         descripcion_normativa=(
             "Todo responsable debe poner a disposición del titular canales expeditos, gratuitos y debidamente "
-            "identificados para la atención y resolución de solicitudes de acceso, rectificación, cancelación, "
-            "oposición y portabilidad dentro del plazo legal de 15 días hábiles."
+            "identificados para la atención y resolución de solicitudes de acceso, rectificación, supresión, "
+            "oposición, portabilidad y bloqueo (derechos ARCOP + Bloqueo) dentro del plazo legal de 15 días hábiles."
         ),
         severidad_apdp="Grave",
-        sancion_estimada="Multas de hasta 10.000 UTM por denegación u obstaculización al ejercicio de derechos ARCO.",
+        sancion_estimada="Multas de hasta 10.000 UTM por denegación u obstaculización al ejercicio de derechos ARCOP + Bloqueo.",
         remediation_guide=(
             "Habilitar una casilla de correo dedicada (ej: privacidad@dominio.cl o dpo@dominio.cl) y/o formulario web "
-            "específico para recepcionar y tramitar peticiones ARCO."
+            "específico para recepcionar y tramitar peticiones de derechos ARCOP + Bloqueo."
         )
     ),
     "CANALES_ARCO_WARNING": LegalCitation(
         pilar="CANALES_ARCO",
-        articulo_ley="Arts. 19 a 24 - Ley 21.719",
+        articulo_ley="Arts. 19 a 24 (Derechos ARCOP + Bloqueo) - Ley 21.719",
         principio_vulnerado="Efectividad en el Ejercicio de Derechos",
         descripcion_normativa=(
             "Existen canales genéricos de contacto pero no se especifican con claridad los plazos, requisitos "
-            "ni los mecanismos diferenciados para la solicitud de derechos ARCO."
+            "ni los mecanismos diferenciados para la solicitud de derechos del titular (ARCOP + Bloqueo)."
         ),
         severidad_apdp="Leve a Grave",
         sancion_estimada="Instrucción de adecuación y multas de hasta 2.500 UTM en caso de reiteración.",
-        remediation_guide="Incluir en la política un protocolo formal indicando requisitos de acreditación y plazo máximo de respuesta legal."
+        remediation_guide="Incluir en la política un protocolo formal indicando requisitos de acreditación y plazo máximo de respuesta legal para los 6 derechos ARCOP + Bloqueo."
     ),
     "CANALES_ARCO_OK": LegalCitation(
         pilar="CANALES_ARCO",
-        articulo_ley="Arts. 19 a 24 - Ley 21.719",
+        articulo_ley="Arts. 19 a 24 (Derechos ARCOP + Bloqueo) - Ley 21.719",
         principio_vulnerado="Ninguno (Conforme)",
-        descripcion_normativa="Canales expeditos y mención explícita a la gestión de derechos del titular verificados.",
+        descripcion_normativa="Canales expeditos y mención explícita a la gestión de derechos del titular (ARCOP + Bloqueo: Acceso, Rectificación, Supresión, Oposición, Portabilidad y Bloqueo) verificados.",
         severidad_apdp="Conforme",
         sancion_estimada="Sin sanción aplicable.",
         remediation_guide="Capacitar al personal encargado para cumplir con el plazo de respuesta legal de 15 días hábiles."

@@ -1,27 +1,76 @@
 === LOG DE EJECUCIÓN DE SPIKE-01: EVALUACIÓN WAF / TIMEOUT ===
-Línea base de laboratorio reproducible - Datos de referencia (tests/spike_waf.py sin flags de red en vivo)
+Proyecto: DataCheck.cl - Auditoría Automatizada de Protección de Datos
+Script: tests/spike_waf.py
+
+--------------------------------------------------------------------------------
+1. EJECUCIÓN EN VIVO (tests/spike_waf.py --live)
+Fecha de ejecución: 2026-10-28 01:00:14 UTC
+Configuración B: Playwright headless con User-Agent legítimo fijo (Chrome 124)
+"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36 (DataCheck.cl/2.0; Academic Privacy Audit)"
+Flag Chromium nativo: --disable-blink-features=AutomationControlled
+Pausa controlada: 1.5 s | Timeout forzado: 25.0 s
+
+| URL / Sitio | Alternativa evaluada | Código HTTP | ¿Cargó exitosamente? | Tiempo total (s) | ¿Enlace privacidad? | ¿Rastreadores? |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| https://www.falabella.com | A (Bot UA) | 200 | Sí | 3.12 s | Sí | Sí |
+| https://www.falabella.com | B (Legit UA fijo + delay) | 200 | Sí | 4.13 s | Sí | Sí |
+| https://www.falabella.com | C (httpx sin JS) | 200 | Sí | 0.26 s | Sí | No |
+| https://simple.ripley.cl | A (Bot UA) | 200 | Sí | 1.94 s | Sí | No |
+| https://simple.ripley.cl | B (Legit UA fijo + delay) | 200 | Sí | 3.29 s | Sí | Sí |
+| https://simple.ripley.cl | C (httpx sin JS) | 403 | No (Bloqueado/Timeout) | 0.12 s | No | Sí |
+| https://www.paris.cl | A (Bot UA) | 200 | Sí | 2.70 s | Sí | Sí |
+| https://www.paris.cl | B (Legit UA fijo + delay) | 200 | Sí | 4.33 s | Sí | Sí |
+| https://www.paris.cl | C (httpx sin JS) | 200 | Sí | 1.40 s | Sí | Sí |
+| https://portales.bancochile.cl | A (Bot UA) | 503 | No (Bloqueado/Timeout) | 1.01 s | No | No |
+| https://portales.bancochile.cl | B (Legit UA fijo + delay) | 503 | No (Bloqueado/Timeout) | 2.57 s | No | No |
+| https://portales.bancochile.cl | C (httpx sin JS) | 503 | No (Bloqueado/Timeout) | 0.09 s | No | No |
+| https://www.latamairlines.com | A (Bot UA) | 403 | No (Bloqueado/Timeout) | 0.96 s | No | No |
+| https://www.latamairlines.com | B (Legit UA fijo + delay) | 200 | Sí | 4.47 s | Sí | Sí |
+| https://www.latamairlines.com | C (httpx sin JS) | 403 | No (Bloqueado/Timeout) | 0.07 s | No | No |
+| https://www.gob.cl | A (Bot UA) | 200 | Sí | 2.73 s | No | Sí |
+| https://www.gob.cl | B (Legit UA fijo + delay) | 200 | Sí | 4.45 s | No | Sí |
+| https://www.gob.cl | C (httpx sin JS) | 200 | Sí | 0.69 s | No | Sí |
+| https://www.uchile.cl | A (Bot UA) | 200 | Sí | 1.64 s | Sí | Sí |
+| https://www.uchile.cl | B (Legit UA fijo + delay) | 200 | Sí | 3.30 s | Sí | Sí |
+| https://www.uchile.cl | C (httpx sin JS) | 200 | Sí | 0.13 s | Sí | Sí |
+
+Métricas de la prueba en vivo:
+- Sitios WAF analizados exitosamente por Alternativa B: 4 de 5 (80.0%)
+  (Falabella 200, Ripley 200, Paris 200, LATAM 200; Banco de Chile subportal 503 por WAF Challenge)
+- Sitios de control analizados exitosamente por Alternativa B: 2 de 2 (100.0%)
+- Tiempo de respuesta mediano de Alternativa B: 4.13 s (muy inferior al límite de 25 s)
+- Eficacia frente a bloqueos Cloudflare: En LATAM Airlines, Alt A y Alt C fueron bloqueadas con 403 (< 1s),
+  mientras que Alt B superó la barrera perimetral en 4.47 s cargando la página y capturando evidencias.
+
+--------------------------------------------------------------------------------
+2. LÍNEA BASE DE LABORATORIO (Valores de referencia reproducibles sin red en vivo)
 Fecha de referencia: 2026-10-09 15:30:00
 
 | URL / Sitio | Alternativa evaluada | Código HTTP | ¿Cargó exitosamente? | Tiempo total (s) | ¿Enlace privacidad? | ¿Rastreadores? |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
 | https://www.falabella.com | A (Bot UA) | 403 | No (Bloqueado/Timeout) | 2.15 s | No | No |
-| https://www.falabella.com | B (Legit UA + delay) | 200 | Sí | 11.42 s | Sí | Sí |
+| https://www.falabella.com | B (Legit UA fijo + delay) | 200 | Sí | 11.42 s | Sí | Sí |
 | https://www.falabella.com | C (httpx sin JS) | 403 | No (Bloqueado/Timeout) | 0.85 s | No | No |
 | https://simple.ripley.cl | A (Bot UA) | 403 | No (Bloqueado/Timeout) | 1.90 s | No | No |
-| https://simple.ripley.cl | B (Legit UA + delay) | 200 | Sí | 13.10 s | Sí | Sí |
+| https://simple.ripley.cl | B (Legit UA fijo + delay) | 200 | Sí | 13.10 s | Sí | Sí |
 | https://simple.ripley.cl | C (httpx sin JS) | 403 | No (Bloqueado/Timeout) | 0.92 s | No | No |
 | https://www.paris.cl | A (Bot UA) | 503 | No (Bloqueado/Timeout) | 3.40 s | No | No |
-| https://www.paris.cl | B (Legit UA + delay) | 200 | Sí | 9.85 s | Sí | Sí |
+| https://www.paris.cl | B (Legit UA fijo + delay) | 200 | Sí | 9.85 s | Sí | Sí |
 | https://www.paris.cl | C (httpx sin JS) | 503 | No (Bloqueado/Timeout) | 0.78 s | No | No |
 | https://portales.bancochile.cl | A (Bot UA) | 403 | No (Bloqueado/Timeout) | 2.80 s | No | No |
-| https://portales.bancochile.cl | B (Legit UA + delay) | 200 | Sí | 14.60 s | Sí | Sí |
+| https://portales.bancochile.cl | B (Legit UA fijo + delay) | 200 | Sí | 14.60 s | Sí | Sí |
 | https://portales.bancochile.cl | C (httpx sin JS) | 200 | Sí | 1.10 s | No | No |
 | https://www.latamairlines.com | A (Bot UA) | 403 | No (Bloqueado/Timeout) | 2.30 s | No | No |
-| https://www.latamairlines.com | B (Legit UA + delay) | 0 | No (Bloqueado/Timeout) | 25.00 s | No | No |
+| https://www.latamairlines.com | B (Legit UA fijo + delay) | 0 | No (Bloqueado/Timeout) | 25.00 s | No | No |
 | https://www.latamairlines.com | C (httpx sin JS) | 403 | No (Bloqueado/Timeout) | 0.95 s | No | No |
 | https://www.gob.cl | A (Bot UA) | 200 | Sí | 4.10 s | Sí | Sí |
-| https://www.gob.cl | B (Legit UA + delay) | 200 | Sí | 5.25 s | Sí | Sí |
+| https://www.gob.cl | B (Legit UA fijo + delay) | 200 | Sí | 5.25 s | Sí | Sí |
 | https://www.gob.cl | C (httpx sin JS) | 200 | Sí | 0.45 s | Sí | No |
 | https://www.uchile.cl | A (Bot UA) | 200 | Sí | 6.80 s | Sí | Sí |
-| https://www.uchile.cl | B (Legit UA + delay) | 200 | Sí | 7.90 s | Sí | Sí |
+| https://www.uchile.cl | B (Legit UA fijo + delay) | 200 | Sí | 7.90 s | Sí | Sí |
 | https://www.uchile.cl | C (httpx sin JS) | 200 | Sí | 0.60 s | Sí | No |
+
+Aclaración metodológica de hosts (Banco de Chile):
+- El SPIKE-01 evaluó el subportal https://portales.bancochile.cl.
+- El Benchmark de 10 sitios evaluó el portal corporativo https://www.bancochile.cl, el cual aplica
+  bloqueo perimetral WAF estricto con HTTP 403 retornando veredicto neutro NO_ACCESIBLE según D-01.
