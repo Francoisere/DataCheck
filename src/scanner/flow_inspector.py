@@ -1,6 +1,6 @@
 """
 Motor de Inspección de Flujo Multietapa Pasivo (DA-01, DA-04).
-Recorre secuencialmente hasta 3 etapas (catálogo → registro → carrito/checkout)
+Recorre secuencialmente hasta 4 etapas (inicio → catálogo → registro → carrito)
 usando exclusivamente peticiones HTTP GET públicas (page.goto).
 
 Garantías operativas Nivel 0:
@@ -157,8 +157,8 @@ class FlowInspector:
                         reason="Flujo no detectado en este sitio. No se encontraron enlaces hacia catálogo, registro o carrito en el mismo dominio.",
                     )
 
-                # Recorrer hasta 3 etapas secuenciales
-                for stage_info in discovered_stages[:3]:
+                # Recorrer hasta 4 etapas secuenciales
+                for stage_info in discovered_stages[:4]:
                     stage_url = stage_info["url"]
                     stage_name = stage_info["stage_name"]
                     stage_label = stage_info["stage_label"]
