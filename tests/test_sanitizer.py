@@ -54,3 +54,11 @@ def test_sanitizer_rejects_empty_or_whitespace_urls():
     for empty in ["", "   ", "\t\n"]:
         with pytest.raises(ValueError):
             sanitize_url(empty)
+
+
+def test_sanitizer_rejects_disallowed_ports():
+    """Caso 6: Rechazar puertos distintos de 80 y 443 (FB-01)."""
+    with pytest.raises(ValueError, match="Puerto no permitido"):
+        sanitize_url("https://sitio.cl:8080/path")
+    with pytest.raises(ValueError, match="Puerto no permitido"):
+        sanitize_url("http://sitio.cl:8443/api")

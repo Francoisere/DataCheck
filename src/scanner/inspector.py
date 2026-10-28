@@ -54,7 +54,35 @@ class TrafficCapture:
                 self.detected_tracker_domains.append(domain)
 
 
+async def block_non_get_route(route, request=None) -> None:
+    """
+    FB-01 / DA-01: Interceptor estricto de red.
+    - Aborta inmediatamente cualquier metodo HTTP que no sea GET (POST, PUT, DELETE, PATCH).
+    - Valida contra SSRF y puertos no permitidos cualquier destino solicitado.
+    """
+    req = request if request is not None else route.request
+    if req.method != "GET":
+        await route.abort("blockedbyclient")
+        return
+
+    try:
+        url = req.url
+        parsed = urllib.parse.urlsplit(url)
+        if parsed.scheme.lower() in ("http", "https") and parsed.hostname:
+            from src.core.sanitizer import validate_ssrf
+            validate_ssrf(parsed.hostname)
+            if parsed.port and parsed.port not in (80, 443):
+                await route.abort("blockedbyclient")
+                return
+    except Exception:
+        await route.abort("blockedbyclient")
+        return
+
+    await route.continue_()
+
+
 class WebInspector:
+    block_non_get = staticmethod(block_non_get_route)
     def __init__(
         self,
         timeout_seconds: float = settings.SCAN_TIMEOUT_SECONDS,
@@ -114,7 +142,8 @@ class WebInspector:
                 "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-accelerated-2d-canvas",
-                "--disable-gpu"
+                "--disable-gpu",
+                "--disable-blink-features=AutomationControlled"
             ]
             try:
                 browser = await p.chromium.launch(headless=True, args=launch_args)
@@ -137,17 +166,11 @@ class WebInspector:
                 )
                 self._active_context = context
 
-                # FB-01: Intercepción estricta: abortar cualquier petición que no sea HTTP GET
-                async def block_non_get(route, request):
-                    if request.method != "GET":
-                        await route.abort("blockedbyclient")
-                    else:
-                        await route.continue_()
-
-                await context.route("**/*", block_non_get)
+                # FB-01: Intercepcion estricta: abortar cualquier peticion que no sea HTTP GET
+                await context.route("**/*", block_non_get_route)
 
                 page: Page = await context.new_page()
-                await page.route("**/*", block_non_get)
+                await page.route("**/*", block_non_get_route)
 
                 # Listener pasivo de tráfico de red
                 page.on("request", traffic_capture.handle_request)

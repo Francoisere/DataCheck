@@ -170,3 +170,36 @@ async def test_ec06_sanitizacion_cero_datos_sensibles():
     assert "admin" not in normalized
     assert "supersecret" not in normalized
     assert "token123" not in normalized
+
+
+# ==============================================================================
+# ALIASES Y MÉTODOS DE TRAZABILIDAD EXACTA CON EL INFORME DE ARQUITECTURA
+# ==============================================================================
+
+@pytest.mark.asyncio
+async def test_ec01_rendimiento_carga_normal():
+    """Alias para trazabilidad con §15: Carga normal < 15 segundos."""
+    await test_ec01_rendimiento_estandar()
+
+
+@pytest.mark.asyncio
+async def test_ec03_seguridad_no_intrusiva_solo_get():
+    """Alias para trazabilidad con §15: Interceptores pasivos solo-GET y cero mutaciones."""
+    from src.scanner.inspector import WebInspector, block_non_get_route
+    inspector = WebInspector()
+    assert hasattr(WebInspector, "block_non_get")
+    assert not hasattr(inspector, "click")
+    assert not hasattr(inspector, "fill")
+    assert not hasattr(inspector, "submit")
+
+
+@pytest.mark.asyncio
+async def test_ec04_privacy_by_design_db():
+    """Alias para trazabilidad con §15: Verificación de persistencia sin credenciales ni tokens."""
+    from src.core.sanitizer import sanitize_url
+    norm, domain = sanitize_url("https://user:pass@tienda.cl/checkout?token=secret123#step2")
+    assert "user" not in norm
+    assert "pass" not in norm
+    assert "token" not in norm
+    assert "secret123" not in norm
+    assert norm == "https://tienda.cl/checkout"

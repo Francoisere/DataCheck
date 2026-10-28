@@ -325,12 +325,17 @@ document.addEventListener("DOMContentLoaded", () => {
         startProgress();
         const t0 = performance.now();
 
+        const abortCtrl = new AbortController();
+        const timeoutTimer = setTimeout(() => abortCtrl.abort(), 26000);
+
         try {
             const res = await fetch("/api/v1/scan", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ url: target }),
+                signal: abortCtrl.signal,
             });
+            clearTimeout(timeoutTimer);
 
             if (!res.ok) {
                 const err = await res.json().catch(() => ({ detail: res.statusText }));
@@ -347,10 +352,15 @@ document.addEventListener("DOMContentLoaded", () => {
             setBusy(false);
             renderResults(data, performance.now() - t0);
         } catch (e) {
+            clearTimeout(timeoutTimer);
             stopProgress();
             loading.hidden = true;
             setBusy(false);
-            errorMessage.textContent = e.message || "No pudimos conectar con el servidor.";
+            if (e.name === "AbortError") {
+                errorMessage.textContent = "Tiempo de espera agotado (26 segundos). El servidor no respondió a tiempo.";
+            } else {
+                errorMessage.textContent = e.message || "No pudimos conectar con el servidor.";
+            }
             errorBox.hidden = false;
         }
     }
@@ -561,6 +571,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function renderResults(data, elapsedMs) {
         const tone = toneOf(data.verdict);
         lastReport = data;
+        if (btnPdf) btnPdf.disabled = false;
         pdfError.hidden = true;
 
         const flowSec = $("flow-section");
@@ -648,6 +659,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if ($("consent-section")) $("consent-section").hidden = true;
         if ($("responsible-section")) $("responsible-section").hidden = true;
         lastReport = data;
+        if (btnPdf) btnPdf.disabled = false;
         pdfError.hidden = true;
 
         const tone = toneOf(data.flow_verdict);
@@ -766,6 +778,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const pdfLabel = $("pdf-label");
     const pdfError = $("pdf-error");
     let lastReport = null;
+    if (btnPdf) btnPdf.disabled = true;
 
     function setPdfBusy(busy) {
         btnPdf.disabled = busy;
@@ -851,27 +864,24 @@ document.addEventListener("DOMContentLoaded", () => {
         pdfError.hidden = true;
         setPdfBusy(true);
         try {
-            if (lastReport.pdf_report_url) {
-                window.open(lastReport.pdf_report_url, "_blank");
-            } else {
-                // Pide el PDF al backend con el resultado de la auditoría actual
-                const res = await fetch("/api/v1/audits/generate-pdf", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(lastReport),
-                });
-                if (!res.ok) throw new Error("El servidor no pudo generar el PDF.");
-                const blobUrl = URL.createObjectURL(await res.blob());
-                const a = document.createElement("a");
-                a.href = blobUrl;
-                const disposition = res.headers.get("Content-Disposition") || "";
-                const match = disposition.match(/filename="?([^";]+)"?/);
-                a.download = match ? match[1] : "DataCheck_Auditoria.pdf";
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                URL.revokeObjectURL(blobUrl);
-            }
+            // Genera el informe PDF usando el payload completo en memoria
+            // para garantizar paridad visual absoluta con banner, frames y responsable (AC-REP-02)
+            const res = await fetch("/api/v1/audits/generate-pdf", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(lastReport),
+            });
+            if (!res.ok) throw new Error("El servidor no pudo generar el PDF.");
+            const blobUrl = URL.createObjectURL(await res.blob());
+            const a = document.createElement("a");
+            a.href = blobUrl;
+            const disposition = res.headers.get("Content-Disposition") || "";
+            const match = disposition.match(/filename="?([^";]+)"?/);
+            a.download = match ? match[1] : "DataCheck_Auditoria.pdf";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(blobUrl);
         } catch (e) {
             pdfError.textContent = "No se pudo descargar el PDF: " + e.message;
             pdfError.hidden = false;

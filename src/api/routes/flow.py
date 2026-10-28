@@ -128,9 +128,19 @@ async def start_flow_audit(
     Retorna un job_id para consultar el estado con GET /flow-audit/{job_id}.
     El flujo puede tardar 60-75 segundos.
     """
-    url = request.url.strip()
-    if not url:
+    raw_url = request.url.strip()
+    if not raw_url:
         raise HTTPException(status_code=400, detail="La URL no puede estar vacía.")
+
+    try:
+        url, _ = sanitize_url(raw_url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Limpieza de jobs en memoria para evitar crecimiento indefinido
+    if len(_flow_jobs) > 100:
+        for old_k in list(_flow_jobs.keys())[:20]:
+            _flow_jobs.pop(old_k, None)
 
     job_id = str(uuid.uuid4())
     _flow_jobs[job_id] = {

@@ -14,6 +14,7 @@ __all__ = [
     "CMP_SIGNATURES",
     "CMP_FRAME_DOMAINS",
     "BANNER_BUTTON_TEXTS",
+    "get_tracker_category",
 ]
 
 KNOWN_TRACKER_DOMAINS = [
@@ -194,3 +195,17 @@ BANNER_BUTTON_TEXTS = [
     "settings", "cookie settings", "manage preferences",
     "necessary only", "essential only",
 ]
+
+def get_tracker_category(name_or_domain: str) -> str:
+    """
+    Clasifica un rastreador o cookie en categorías normativas:
+    'analítica', 'publicidad', 'redes_sociales', 'grabación_sesión'.
+    """
+    target = name_or_domain.lower()
+    if any(k in target for k in ["facebook", "meta", "tiktok", "twitter", "licdn", "linkedin", "_fbp", "_fbc", "fr", "_tt"]):
+        return "redes_sociales"
+    if any(k in target for k in ["doubleclick", "criteo", "googleadservices", "taboola", "outbrain", "adroll", "_gcl_au"]):
+        return "publicidad"
+    if any(k in target for k in ["hotjar", "clarity", "crazyegg", "mouseflow", "inspectlet", "_hj", "_clck", "_clsk"]):
+        return "grabación_sesión"
+    return "analítica"

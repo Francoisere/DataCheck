@@ -118,6 +118,9 @@ class Hallazgo(Base):
 
 class EvidenciaRastreador(Base):
     __tablename__ = "evidencias_rastreadores"
+    __table_args__ = (
+        UniqueConstraint("auditoria_id", "tipo", "valor", name="uq_evidencia_auditoria_tipo_valor"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4

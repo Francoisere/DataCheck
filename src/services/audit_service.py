@@ -14,6 +14,8 @@ from sqlalchemy import select
 from src.core.sanitizer import sanitize_url
 from src.scanner.inspector import WebInspector
 from src.scanner.rules_engine import RulesEngine
+from src.scanner.trackers_db import get_tracker_category
+from src.core.config import settings
 from src.db.models import (
     SitioAnalizado,
     Auditoria,
@@ -50,10 +52,10 @@ class AuditService:
         try:
             scan_raw = await asyncio.wait_for(
                 self.inspector.scan_url(normalized_url),
-                timeout=24.0
+                timeout=settings.SCAN_TIMEOUT_SECONDS
             )
         except asyncio.TimeoutError:
-            logger.warning(f"Timeout global excedido (24s) escaneando {normalized_url}")
+            logger.warning(f"Timeout global excedido (25s) escaneando {normalized_url}")
             await self.inspector.force_close()
             scan_raw = {
                 "target_url": normalized_url,
@@ -171,6 +173,10 @@ class AuditService:
         for finding in audit_result.get("findings", []):
             pilar_key = finding.get("pilar", "POLITICA_PRIVACIDAD")
             pilar_record = pilar_records.get(pilar_key)
+            # Si el pilar es ACCESIBILIDAD_PERIMETRAL, asociarlo al primer pilar para no perder el ticket
+            if not pilar_record and pilar_records:
+                pilar_record = list(pilar_records.values())[0]
+
             if pilar_record:
                 h = Hallazgo(
                     resultado_pilar_id=pilar_record.id,
@@ -182,22 +188,29 @@ class AuditService:
                 )
                 db.add(h)
 
-        # Guardar Evidencias de Rastreadores
+        # Guardar Evidencias de Rastreadores (sin duplicados conforme a UNIQUE constraint)
         tracker_audit = scan_raw.get("tracker_audit", {})
+        seen_evidence = set()
         for domain_name in tracker_audit.get("detected_tracker_domains", []):
-            db.add(EvidenciaRastreador(
-                auditoria_id=auditoria.id,
-                tipo="DOMINIO",
-                valor=domain_name[:255],
-                categoria="TRACKER_DOMAIN"
-            ))
+            key = ("DOMINIO", domain_name[:255])
+            if key not in seen_evidence:
+                seen_evidence.add(key)
+                db.add(EvidenciaRastreador(
+                    auditoria_id=auditoria.id,
+                    tipo="DOMINIO",
+                    valor=domain_name[:255],
+                    categoria=get_tracker_category(domain_name)
+                ))
 
         for cookie_name in tracker_audit.get("detected_tracker_cookies", []):
-            db.add(EvidenciaRastreador(
-                auditoria_id=auditoria.id,
-                tipo="COOKIE",
-                valor=cookie_name[:255],
-                categoria="TRACKER_COOKIE"
-            ))
+            key = ("COOKIE", cookie_name[:255])
+            if key not in seen_evidence:
+                seen_evidence.add(key)
+                db.add(EvidenciaRastreador(
+                    auditoria_id=auditoria.id,
+                    tipo="COOKIE",
+                    valor=cookie_name[:255],
+                    categoria=get_tracker_category(cookie_name)
+                ))
 
         return auditoria.id

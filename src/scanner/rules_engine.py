@@ -461,11 +461,19 @@ class RulesEngine:
         #   o banner de cookies puramente informativo sin opción real de rechazo o configuración.
         banner_lacks_reject = banner_detected and buttons_verifiable and not has_reject_option
 
+        policy_missing = (not privacy_audit.get("found")) or (privacy_audit.get("http_status") in (0, 404, 500))
+
         if has_unauthorized:
             verdict = "RECHAZADO"
             verdict_summary = (
                 "Incumplimiento crítico: Se detectaron rastreadores de terceros o cookies "
                 "no esenciales activos previo al consentimiento del usuario."
+            )
+        elif policy_missing:
+            verdict = "RECHAZADO"
+            verdict_summary = (
+                "Incumplimiento crítico: Ausencia o inaccesibilidad de la política de privacidad "
+                "(enlace no localizado o ruta retornando código de error HTTP)."
             )
         elif score >= 80 and privacy_audit.get("has_mandatory_keywords", False) and not banner_lacks_reject:
             verdict = "APROBADO"
