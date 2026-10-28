@@ -24,7 +24,7 @@ Para dar cumplimiento formal al requerimiento **FB-06** y validar que la tasa de
 | **1** | `https://gob.cl` | Gobierno Central | Conforme (Sin trackers pre-consentimiento, política visible) | **APROBADO** | **85** |  Coincide | Sitio institucional sin cookies de marketing de terceros. |
 | **2** | `https://chileatiende.gob.cl` | Servicios Públicos | Parcial (Política presente, sin trackers, ARCO genérico) | **CON_OBSERVACIONES** | **65** |  Coincide | Mención de derechos generales sin desglose exhaustivo ARCO. |
 | **3** | `https://www.bancochile.cl` | Banca / Financiero | WAF Cloudflare / Incapsula activo ante bots | **NO_ACCESIBLE** | **0** |  Coincide | El sistema reporta correctamente bloqueo perimetral sin penalizar falsamente. |
-| **4** | `https://www.falabella.com` | Retail / E-commerce | No Conforme (Trackers activos `_ga`, Google Ads pre-consentimiento) | **RECHAZADO** | **35** |  Coincide | Disparo de analítica antes de interacción del usuario. |
+| **4** | `https://www.falabella.com` | Retail / E-commerce | No Conforme (Trackers activos _ga, Google Ads pre-consentimiento) | **RECHAZADO** | **35** |  Coincide | Disparo de analítica antes de interacción del usuario. |
 | **5** | `https://www.paris.cl` | Retail / E-commerce | No Conforme (Carga Meta Pixel y Criteo antes de consentimiento) | **RECHAZADO** | **30** |  Coincide | Falla en bloqueo preventivo de cookies de marketing. |
 | **6** | `https://www.emol.com` | Prensa / Medios | No Conforme (Inyección masiva de scripts de adtech y SSPs) | **RECHAZADO** | **25** |  Coincide | 12 dominios de rastreo publicitario activos en la carga inicial. |
 | **7** | `https://www.latercera.com` | Prensa / Medios | No Conforme (Google Analytics y Chartbeat previo a opt-in) | **RECHAZADO** | **30** |  Coincide | Banner puramente informativo sin botón de rechazo simétrico. |
@@ -58,32 +58,13 @@ Donde:
 
 2. **Tasa de Falsos Positivos (False Positive Rate - FPR)**:
    $$\text{FPR} = \frac{FP}{FP + TN} = \frac{0}{0 + 2} = 0.0\%$$
-   *(Cumple ampliamente la meta exigida de $\text{FPR} < 10\%$)*.
 
-3. **Sensibilidad (Recall / True Positive Rate)**:
-   $$\text{Recall} = \frac{TP}{TP + FN} = \frac{8}{8 + 0} = 100.0\%$$
-
-4. **Especificidad (True Negative Rate)**:
-   $$\text{Specificity} = \frac{TN}{TN + FP} = \frac{2}{2 + 0} = 100.0\%$$
+   *El resultado empírico obtenido (0.0%) satisface con creces el límite de aceptación fijado para el Incremento 1 ($< 10.0\%$).*  
 
 ---
 
-## 4. Análisis Cualitativo por Hallazgos Técnicos
+## 4. Conclusiones Técnicas
 
-### 4.1. Mitigación Exitosa de Desvíos Previos (WAF y Cortafuegos)
-En evaluaciones anteriores a la implementación del plan de acción, `https://www.bancochile.cl` obtenía veredicto `RECHAZADO` con puntaje de 35 puntos debido a que su Cloudflare WAF retornaba HTTP 403, asumiéndose erróneamente que carecía de política de privacidad.  
-Tras la implementación de **FB-02**, el sistema clasifica de forma inmediata y neutra la situación como:
-* **Veredicto**: `NO_ACCESIBLE`.
-* **Puntaje**: 0 pts (sin penalización sancionatoria de culpabilidad).
-* **Hallazgo**: `ACCESIBILIDAD_PERIMETRAL` con ticket instructivo para configurar bypass de User-Agent en el WAF institucional.
-
-### 4.2. Eficacia de los Tickets Técnicos de Remediación (FB-04)
-En el 100% de los sitios con observaciones (`falabella.com`, `paris.cl`, `emol.com`, `latercera.com`), el informe entregó fragmentos ejecutables:
-* Para Google Tag Manager: Disparo condicionado al evento `cookie_consent_accepted`.
-* Para cookies Set-Cookie: Bloqueo de emisión en respuesta HTTP hasta aceptación afirmativa.
-* Para ARCO: Bloque semántico `mailto:privacidad@dominio.cl` para inserción en footer.
-
----
-
-## 5. Conclusión y Dictamen de Auditoría
-El benchmark empírico demuestra que **DataCheck.cl** opera con una precisión robusta, eliminando falsos positivos en sitios protegidos por cortafuegos perimetrales y diagnosticando con precisión determinista las obligaciones técnicas establecidas en la Ley N° 21.719 de Chile.
+1. **Control de Falsos Positivos**: El motor determinista de reglas previene acusaciones infundadas gracias a la neutralidad ante bloqueos WAF (`NO_ACCESIBLE`) y a la detección precisa de cookies esenciales vs. comerciales.
+2. **Sensibilidad Normativa**: En el 100% de los sitios con inyección de cookies comerciales previo al opt-in (`paris.cl`, `falabella.com`, `emol.com`), el sistema identificó correctamente el incumplimiento y emitió los tickets técnicos de remediación.
+3. **Trazabilidad y Reproducibilidad**: Este informe es generado automáticamente por el script `src/scanner/benchmark.py`.

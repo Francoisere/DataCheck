@@ -19,7 +19,7 @@ from sqlalchemy import (
     DateTime,
     Boolean,
     ForeignKey,
-    UniqueConstraint
+    UniqueConstraint, CheckConstraint
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -49,6 +49,12 @@ class SitioAnalizado(Base):
 
 class Auditoria(Base):
     __tablename__ = "auditorias"
+    __table_args__ = (
+        CheckConstraint(
+            "verdict IN ('APROBADO', 'CON_OBSERVACIONES', 'RECHAZADO', 'NO_ACCESIBLE', 'CUMPLE', 'NO_CUMPLE', 'NO_VERIFICABLE', 'NO_APLICABLE')",
+            name="ck_auditoria_verdict"
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -58,8 +64,8 @@ class Auditoria(Base):
     )
     ejecutada_en: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, nullable=False)
     page_load_status: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    verdict: Mapped[str] = mapped_column(String(50), nullable=False)  # APROBADO | CON_OBSERVACIONES | RECHAZADO
-    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    verdict: Mapped[str] = mapped_column(String(50), nullable=False)
+    score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Nullable para auditorías de flujo
     duracion_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     resumen: Mapped[str] = mapped_column(Text, nullable=False)
 
@@ -76,7 +82,8 @@ class Auditoria(Base):
 class ResultadoPilar(Base):
     __tablename__ = "resultados_pilares"
     __table_args__ = (
-        UniqueConstraint("auditoria_id", "pilar", name="uq_auditoria_pilar"),
+        UniqueConstraint("auditoria_id", "pilar", name="uq_resultado_auditoria_pilar"),
+        CheckConstraint("estado IN ('CUMPLE', 'OBSERVACION', 'FALLA', 'NO_EVALUADO')", name="ck_resultado_pilar_estado"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -99,13 +106,20 @@ class ResultadoPilar(Base):
 
 class Hallazgo(Base):
     __tablename__ = "hallazgos"
+    __table_args__ = (
+        CheckConstraint("severidad IN ('OK', 'WARNING', 'FAIL')", name="ck_hallazgo_severidad"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    resultado_pilar_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("resultados_pilares.id", ondelete="CASCADE"), nullable=False, index=True
+    auditoria_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("auditorias.id", ondelete="CASCADE"), nullable=True, index=True
     )
+    resultado_pilar_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("resultados_pilares.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    pilar: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     severidad: Mapped[str] = mapped_column(String(20), nullable=False)  # OK | WARNING | FAIL
     titulo: Mapped[str] = mapped_column(String(255), nullable=False)
     detalle: Mapped[str] = mapped_column(String(300), nullable=False)  # Privacy by Design max 300 chars
@@ -113,13 +127,14 @@ class Hallazgo(Base):
     recomendacion: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Relaciones
-    resultado_pilar: Mapped["ResultadoPilar"] = relationship("ResultadoPilar", back_populates="hallazgos")
+    resultado_pilar: Mapped[Optional["ResultadoPilar"]] = relationship("ResultadoPilar", back_populates="hallazgos")
 
 
 class EvidenciaRastreador(Base):
     __tablename__ = "evidencias_rastreadores"
     __table_args__ = (
         UniqueConstraint("auditoria_id", "tipo", "valor", name="uq_evidencia_auditoria_tipo_valor"),
+        CheckConstraint("tipo IN ('DOMINIO', 'COOKIE')", name="ck_evidencia_tipo"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(

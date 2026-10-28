@@ -8,12 +8,28 @@ from src.api.main import app
 
 @pytest.mark.asyncio
 async def test_health_endpoint():
+    """C-03: Verifica /healthcheck y /api/v1/health devolviendo estado ok y conexión a BD."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # 1. Probar ruta canónica /api/v1/health
         response = await client.get("/api/v1/health")
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "ok"
         assert "DataCheck.cl" in data["service"]
+        assert "database" in data
+
+        # 2. Probar ruta raíz /healthcheck
+        res_root = await client.get("/healthcheck")
+        assert res_root.status_code == 200
+        assert res_root.json()["status"] == "ok"
+
+        # 3. Simular caída de base de datos -> debe retornar HTTP 503
+        with patch("src.api.routes.health.engine") as mock_eng:
+            mock_eng.connect.side_effect = Exception("DB Connection Refused")
+            res_down = await client.get("/healthcheck")
+            assert res_down.status_code == 503
+            assert res_down.json()["status"] == "unhealthy"
+            assert "unreachable" in res_down.json()["database"]
 
 
 @pytest.mark.asyncio

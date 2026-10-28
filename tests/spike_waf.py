@@ -229,7 +229,7 @@ async def test_spike_benchmark_evaluation():
 
 if __name__ == "__main__":
     live_flag = "--live" in sys.argv
-    print(f"--- Ejecutando SPIKE-01 (Modo {'Red en Vivo' if live_flag else 'Laboratorio Reproducible'}) ---")
+    print(f"--- Ejecutando SPIKE-01 ({'Modo Red en Vivo' if live_flag else 'Línea base de laboratorio reproducible - Datos de referencia'}) ---")
     data = asyncio.run(run_spike_benchmark(live_network=live_flag))
     print("| URL / Sitio | Alternativa evaluada | Código HTTP | ¿Cargó exitosamente? | Tiempo total (s) | ¿Enlace privacidad? | ¿Rastreadores? |")
     print("| :--- | :--- | :---: | :---: | :---: | :---: | :---: |")

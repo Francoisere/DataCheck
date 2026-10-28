@@ -57,26 +57,7 @@ class AuditService:
         except asyncio.TimeoutError:
             logger.warning(f"Timeout global excedido (25s) escaneando {normalized_url}")
             await self.inspector.force_close()
-            scan_raw = {
-                "target_url": normalized_url,
-                "page_load_status": 0,
-                "error_message": "TIMEOUT_EXCEDIDO",
-                "tracker_audit": {
-                    "has_unauthorized_trackers": False,
-                    "detected_tracker_domains": [],
-                    "detected_tracker_cookies": []
-                },
-                "privacy_policy_audit": {"found": False, "http_status": 0},
-                "arco_channels_audit": {
-                    "found": False,
-                    "detected_emails": [],
-                    "has_explicit_arco_mention": False,
-                    "detected_terms": []
-                },
-                "consent_banner_audit": None,
-                "frames_audit": None,
-                "responsible_party_audit": None
-            }
+            scan_raw = self.inspector._build_timeout_fallback(normalized_url)
 
         # 3. Motor de reglas y dictamen
         audit_result = RulesEngine.evaluate(scan_raw)
@@ -146,6 +127,8 @@ class AuditService:
         db.add(auditoria)
         await db.flush()
 
+        is_inaccessible = audit_result.get("verdict") == "NO_ACCESIBLE"
+
         # Crear Resultados de Pilares y Hallazgos
         pilares_dict = audit_result.get("pilares", {})
         pilar_mapping = {
@@ -157,10 +140,12 @@ class AuditService:
         pilar_records: Dict[str, ResultadoPilar] = {}
         for key, pilar_enum in pilar_mapping.items():
             data = pilares_dict.get(key, {})
+            # Ante bloqueo WAF o timeout, no sancionar falsamente con FALLA: estado neutro NO_EVALUADO
+            estado_pilar = "NO_EVALUADO" if is_inaccessible else data.get("status", "FALLA")
             record = ResultadoPilar(
                 auditoria_id=auditoria.id,
                 pilar=pilar_enum,
-                estado=data.get("status", "FALLA"),
+                estado=estado_pilar,
                 puntaje=data.get("score", 0),
                 puntaje_max=data.get("max_score", 35)
             )
@@ -171,22 +156,21 @@ class AuditService:
 
         # Guardar Hallazgos
         for finding in audit_result.get("findings", []):
-            pilar_key = finding.get("pilar", "POLITICA_PRIVACIDAD")
+            pilar_key = finding.get("pilar", "")
             pilar_record = pilar_records.get(pilar_key)
-            # Si el pilar es ACCESIBILIDAD_PERIMETRAL, asociarlo al primer pilar para no perder el ticket
-            if not pilar_record and pilar_records:
-                pilar_record = list(pilar_records.values())[0]
-
-            if pilar_record:
-                h = Hallazgo(
-                    resultado_pilar_id=pilar_record.id,
-                    severidad=finding.get("status", "OK"),
-                    titulo=finding.get("title", "")[:255],
-                    detalle=finding.get("detail", "")[:300],
-                    technical_raw=finding.get("technical_raw", "")[:500] if finding.get("technical_raw") else None,
-                    recomendacion=finding.get("remediation_ticket", "")
-                )
-                db.add(h)
+            # Para hallazgos perimetrales (WAF/Timeout), resultado_pilar_id queda None
+            # y se vincula directamente a auditoria_id sin contaminar el pilar de Política
+            h = Hallazgo(
+                auditoria_id=auditoria.id,
+                resultado_pilar_id=pilar_record.id if pilar_record else None,
+                pilar=pilar_key or None,
+                severidad=finding.get("status", "OK"),
+                titulo=finding.get("title", "")[:255],
+                detalle=finding.get("detail", "")[:300],
+                technical_raw=finding.get("technical_raw", "")[:500] if finding.get("technical_raw") else None,
+                recomendacion=finding.get("remediation_ticket", "")
+            )
+            db.add(h)
 
         # Guardar Evidencias de Rastreadores (sin duplicados conforme a UNIQUE constraint)
         tracker_audit = scan_raw.get("tracker_audit", {})

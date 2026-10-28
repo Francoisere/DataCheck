@@ -43,13 +43,12 @@ async def _persist_flow_to_db(url: str, evaluated: Dict[str, Any], raw_result: D
                 await session.flush()
 
             verdict = evaluated.get("flow_verdict", "NO_APLICABLE")
-            score = 100 if verdict == "CUMPLE" else (50 if verdict == "NO_VERIFICABLE" else 0)
 
             auditoria = Auditoria(
                 sitio_id=sitio.id,
                 page_load_status=1,
                 verdict=verdict,
-                score=score,
+                score=None,  # Los flujos se rigen por veredictos de etapa (CUMPLE/NO_CUMPLE/NO_VERIFICABLE), no por score numérico
                 duracion_ms=0,
                 resumen=evaluated.get("flow_verdict_summary", "")[:500],
             )

@@ -1,5 +1,6 @@
 === LOG DE EJECUCIÓN DE SPIKE-01: EVALUACIÓN WAF / TIMEOUT ===
-Fecha de ejecución: 2026-10-09 15:30:00 - Modo Laboratorio Reproducible (tests/spike_waf.py)
+Línea base de laboratorio reproducible - Datos de referencia (tests/spike_waf.py sin flags de red en vivo)
+Fecha de referencia: 2026-10-09 15:30:00
 
 | URL / Sitio | Alternativa evaluada | Código HTTP | ¿Cargó exitosamente? | Tiempo total (s) | ¿Enlace privacidad? | ¿Rastreadores? |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: |
