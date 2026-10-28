@@ -117,13 +117,18 @@ MANDATORY_LEGAL_KEYWORDS = [
 
 ARCO_KEYWORDS = [
     "arco",
+    "arcop",
     "acceso",
     "rectificacion",
     "rectificación",
     "cancelacion",
     "cancelación",
+    "supresion",
+    "supresión",
     "oposicion",
     "oposición",
+    "portabilidad",
+    "bloqueo",
     "derechos del titular",
     "ejercicio de derechos"
 ]

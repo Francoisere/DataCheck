@@ -119,6 +119,7 @@ class ResponsiblePartyAudit(BaseModel):
     detected_rut: Optional[str] = Field(None, description="RUT de la empresa/responsable identificado")
     contact_email: Optional[str] = Field(None, description="Correo electrónico formal de contacto o notificación")
     postal_address: Optional[str] = Field(None, description="Domicilio postal o dirección detectada")
+    dpo_email: Optional[str] = Field(None, description="Correo electrónico específico del Delegado de Protección de Datos (DPO)")
 
 
 class ScanResponse(BaseModel):

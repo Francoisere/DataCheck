@@ -298,7 +298,12 @@ class WebInspector:
                             "dpo_found": False,
                             "contact_channels_found": [],
                             "verdict": "NO_VERIFICABLE",
-                            "notes": "No fue posible verificar información del responsable debido al bloqueo de acceso perimetral."
+                            "notes": "No fue posible verificar información del responsable debido al bloqueo de acceso perimetral.",
+                            "corporate_name": None,
+                            "detected_rut": None,
+                            "contact_email": None,
+                            "postal_address": None,
+                            "dpo_email": None
                         }
                     }
 
@@ -542,6 +547,11 @@ class WebInspector:
                 "dpo_found": False,
                 "contact_channels_found": [],
                 "verdict": "NO_VERIFICABLE",
-                "notes": "No fue posible verificar información del responsable por agotamiento de tiempo de escaneo."
+                "notes": "No fue posible verificar información del responsable por agotamiento de tiempo de escaneo.",
+                "corporate_name": None,
+                "detected_rut": None,
+                "contact_email": None,
+                "postal_address": None,
+                "dpo_email": None
             }
         }

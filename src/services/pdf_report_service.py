@@ -177,7 +177,7 @@ class PdfReportService:
                 "Art. 11 (Deber de Transparencia e Información)"
             ],
             [
-                "Canales de Ejercicio de Derechos ARCO",
+                "Canales de Ejercicio de Derechos ARCOP + Bloqueo",
                 p_arco.get("status", "FALLA"),
                 f"{p_arco.get('score', 0)} / {p_arco.get('max_score', 30)} pts",
                 "Arts. 19 a 24 (Acceso, Rectificación, Cancelación, Oposición)"
@@ -285,7 +285,13 @@ class PdfReportService:
                 ident_lines.append("Detectado (Representante)" if is_ident else "No individualizado explícitamente")
             ident_html = "<br/>".join(ident_lines)
 
-            dpo_text = "<b>DPO:</b> Indicado / Nombrado" if rp.get("dpo_found") else "No especificado (Opcional según Art. 49/50)"
+            dpo_mail = rp.get("dpo_email")
+            if dpo_mail:
+                dpo_text = f"<b>DPO:</b> Indicado / Nombrado ({escape(dpo_mail)})"
+            elif rp.get("dpo_found"):
+                dpo_text = "<b>DPO:</b> Indicado / Nombrado"
+            else:
+                dpo_text = "<b>DPO:</b> No especificado (Opcional según Art. 49/50)"
 
             channel_lines = []
             if mail:

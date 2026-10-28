@@ -45,7 +45,7 @@ def test_detector_with_dpo_and_form():
     html = """
     <html>
         <body>
-            <p>Representante legal: Juan Pérez. Encargado de prevención de datos (DPO) designado.</p>
+            <p>Representante legal: Juan Pérez. Encargado de prevención de datos (DPO) designado: dpo@empresa-ejemplo.cl.</p>
             <form action="/contacto" method="post">
                 <input type="text" name="nombre" />
                 <textarea name="mensaje"></textarea>
@@ -59,6 +59,7 @@ def test_detector_with_dpo_and_form():
 
     assert result["representative_found"] is True
     assert result["dpo_found"] is True
+    assert result["dpo_email"] == "dpo@empresa-ejemplo.cl"
     assert "formulario" in result["contact_channels_found"]
     assert result["verdict"] == "CUMPLE"
 
@@ -233,7 +234,8 @@ def test_pdf_generation_with_responsible_party():
             "corporate_name": "Retail Test S.A.",
             "detected_rut": "77.888.999-0",
             "contact_email": "dpo@empresa-test.cl",
-            "postal_address": "Santiago, Chile"
+            "postal_address": "Santiago, Chile",
+            "dpo_email": "dpo@empresa-test.cl"
         }
     }
 

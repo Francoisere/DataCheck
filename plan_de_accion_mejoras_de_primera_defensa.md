@@ -58,7 +58,7 @@
 * **Problema Evaluado**: Cuando un sitio retornaba HTTP 403 o desafío CAPTCHA, el motor de reglas evaluaba la ausencia de políticas y cookies como un incumplimiento legal, emitiendo veredicto `RECHAZADO` con puntaje bajo, en vez de reportar que el sitio no pudo ser inspeccionado.
 * **Archivos Afectados**:
   * `src/scanner/inspector.py`
-  * `src/engine/rules_engine.py`
+  * `src/scanner/rules_engine.py`
   * `tests/test_waf_handling.py`
 * **Acciones de Implementación**:
   1. **Captura Estricta en el Inspector**:
@@ -121,12 +121,12 @@
 
 * **Problema Evaluado**: Los hallazgos se limitaban a describir la falta ("Se detectó cookie _ga"), pero no entregaban al desarrollador la solución técnica concreta prometida en la propuesta de valor.
 * **Archivos Afectados**:
-  * `src/engine/rules_engine.py`
-  * `src/engine/remediation_catalog.py` (Nuevo)
+  * `src/scanner/rules_engine.py`
+  * `src/scanner/remediation_catalog.py` (Nuevo)
   * `src/ui/app.js` e `index.html`
 * **Acciones de Implementación**:
   1. **Catálogo de Tickets de Remediación**:
-     * Crear `src/engine/remediation_catalog.py` asociando cada incumplimiento a un ticket técnico estructurado:
+     * Crear `src/scanner/remediation_catalog.py` asociando cada incumplimiento a un ticket técnico estructurado:
        * **Trackers sin consentimiento previo**: Instrucción para configurar el trigger condicional en Google Tag Manager (GTM) vinculado al evento `cookie_consent_accepted`.
        * **Enlace a política roto (404/500)**: Instrucción para configurar ruta canónica en `/privacidad` con status HTTP 200 en el router web.
        * **Ausencia de canal ARCO**: Plantilla de bloque HTML para pie de página con selector semántico `mailto:privacidad@dominio.cl` y texto visible.
