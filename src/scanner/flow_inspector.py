@@ -1,6 +1,7 @@
 """
 Motor de Inspección de Flujo Multietapa Pasivo (DA-01, DA-04).
 Recorre secuencialmente hasta 4 etapas (inicio → catálogo → registro → carrito)
+Si bien en src/scanner/stage_patterns.py hay definidos solo 3 etapas, en la práctica son 4 contando el inicio, ya que primero se audita la pagina principal (inicio) como base para el resto del flujo
 usando exclusivamente peticiones HTTP GET públicas (page.goto).
 
 Garantías operativas Nivel 0:
