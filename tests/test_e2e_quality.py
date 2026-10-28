@@ -19,7 +19,7 @@ from src.api.main import app
 from src.scanner.inspector import WebInspector, block_non_get_route
 from src.core.sanitizer import sanitize_url
 from src.services.audit_service import AuditService
-from src.db.session import AsyncSessionLocal
+from src.db.session import engine, Base, AsyncSessionLocal
 from src.db.models import SitioAnalizado, Auditoria, Hallazgo, EvidenciaRastreador
 
 
@@ -143,6 +143,10 @@ async def test_ec03_seguridad_no_intrusiva_solo_get():
 @pytest.mark.asyncio
 async def test_ec04_privacy_by_design_db():
     """EC-04 / DA-04: Persistir 10 auditorías y verificar en BD que 0 contraseñas, tokens o fragmentos se almacenen."""
+    # Asegurar inicialización del esquema relacional (especialmente en CI con SQLite efímero)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     service = AuditService()
     async with AsyncSessionLocal() as session:
         for i in range(10):
