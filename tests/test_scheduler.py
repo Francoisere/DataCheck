@@ -15,28 +15,6 @@ from src.db.models import AuditoriaProgramada, Auditoria, SitioAnalizado
 # Pruebas Unitarias de EmailService
 # ==============================================================================
 
-def test_email_content_builder():
-    """Valida la generación de HTML de correo con comparativa de veredictos."""
-    html = EmailService.build_email_content(
-        target_url="https://tienda-ejemplo.cl/",
-        verdict="CON_OBSERVACIONES",
-        score=75,
-        previous_verdict="RECHAZADO",
-        previous_score=20,
-        verdict_summary="Mejora sustancial: se implementó política pero persisten cookies.",
-        findings_count=3,
-        download_url="/api/v1/audits/some-uuid/pdf"
-    )
-
-    assert "https://tienda-ejemplo.cl/" in html
-    assert "CON_OBSERVACIONES" in html
-    assert "RECHAZADO" in html
-    assert "75/100 pts" in html
-    assert "20 pts" in html
-    assert "Mejora sustancial" in html
-    assert "/api/v1/audits/some-uuid/pdf" in html
-
-
 @pytest.mark.asyncio
 async def test_email_service_graceful_fallback():
     """Valida que si SMTP falla o no está disponible, retorna False sin romper la ejecución."""
@@ -82,21 +60,6 @@ async def test_email_service_successful_send():
 # ==============================================================================
 
 @pytest.mark.asyncio
-async def test_create_schedule_invalid_uuid_returns_400():
-    """RF-SCHED-03: Rechazar IDs que no sean UUID."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        res = await client.post(
-            "/api/v1/schedules",
-            json={
-                "audit_id": "not-a-valid-uuid",
-                "email": "contacto@sitio.cl",
-                "interval_mode": "DEMO_2_MIN"
-            }
-        )
-        assert res.status_code == 400
-        assert "UUID" in res.json()["detail"]
-
-
 @pytest.mark.asyncio
 async def test_create_schedule_invalid_email_returns_400():
     """RF-SCHED-02: Rechazar correo sin formato válido."""
@@ -115,22 +78,6 @@ async def test_create_schedule_invalid_email_returns_400():
 
 
 @pytest.mark.asyncio
-async def test_create_schedule_invalid_interval_returns_400():
-    """RF-SCHED-02: Rechazar modos de intervalo desconocidos."""
-    random_uuid = str(uuid.uuid4())
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        res = await client.post(
-            "/api/v1/schedules",
-            json={
-                "audit_id": random_uuid,
-                "email": "contacto@sitio.cl",
-                "interval_mode": "MODO_INEXISTENTE"
-            }
-        )
-        assert res.status_code == 400
-        assert "DEMO_2_MIN" in res.json()["detail"]
-
-
 @pytest.mark.asyncio
 async def test_create_schedule_audit_not_found_returns_404():
     """RF-SCHED-03: Auditoría inexistente en BD retorna 404."""

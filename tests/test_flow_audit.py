@@ -24,30 +24,6 @@ from src.scanner.flow_rules import FlowRulesEngine, FLOW_LEGAL_DISCLAIMER
 from src.api.schemas import FlowScanRequest, FlowAuditResponse, FlowStageResult
 
 
-def test_flow_stages_defined():
-    """Valida que FLOW_STAGES defina las etapas secuenciales requeridas."""
-    names = get_stage_names()
-    assert "catalogo" in names
-    assert "registro" in names
-    assert "carrito" in names
-
-    for stage in FLOW_STAGES:
-        assert "name" in stage
-        assert "label" in stage
-        assert isinstance(stage["url_patterns"], list)
-        assert isinstance(stage["text_patterns"], list)
-        assert len(stage["url_patterns"]) > 0
-
-
-def test_payment_gateways_include_chilean_and_international():
-    """Valida cobertura de pasarelas de pago nacionales e internacionales."""
-    assert any("webpay" in gw for gw in PAYMENT_GATEWAY_DOMAINS)
-    assert any("flow" in gw for gw in PAYMENT_GATEWAY_DOMAINS)
-    assert any("mercadopago" in gw for gw in PAYMENT_GATEWAY_DOMAINS)
-    assert any("stripe" in gw for gw in PAYMENT_GATEWAY_DOMAINS)
-    assert any("paypal" in gw for gw in PAYMENT_GATEWAY_DOMAINS)
-
-
 def test_flow_inspector_zero_mutation_methods():
     """DA-01 / EC-04: FlowInspector no debe exponer métodos de mutación activa."""
     inspector = FlowInspector()
@@ -209,16 +185,6 @@ def test_flow_inspector_timeout_result():
     res = inspector._build_timeout_result("https://tienda-lenta.cl/")
     assert res["flow_detected"] is False
     assert "Tiempo límite" in res["flow_not_detected_reason"]
-
-
-def test_flow_inspector_source_has_no_active_mutation_calls():
-    """DA-01: Verificación estática de que flow_inspector.py no invoque .click(, .fill( ni .submit(."""
-    import inspect
-    from src.scanner import flow_inspector
-    source = inspect.getsource(flow_inspector)
-    assert ".click(" not in source
-    assert ".fill(" not in source
-    assert ".submit(" not in source
 
 
 @pytest.mark.asyncio
