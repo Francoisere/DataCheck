@@ -1,5 +1,8 @@
 # Plan de Acción y Remediación Técnica - Primera Defensa (DataCheck.cl)
 
+> [!NOTE]
+> **Documento de Planificación Histórico (Semanas 6-7)**: Este artefacto registra el plan de acción inicial formulado tras la primera defensa. La nomenclatura oficial definitiva de requisitos funcionales y PBIs se encuentra formalmente consolidada en `docs/trazabilidad_matriz.md` y en la Sección 7 de la Guía de Arquitectura de la Semana 6.
+
 > **Contexto de Evaluación**: Taller de Desarrollo de Software (UCM)  
 > **Resultado de Entrada**: Primera Demostración y Defensa (116 puntos / Nota 5.7)  
 > **Objetivo**: Subsanar el 100% de las observaciones docentes (`FB-01` a `FB-06`) para asegurar la calificación máxima (7.0 / 140 puntos) en la entrega final.  
