@@ -43,13 +43,12 @@ async def _persist_flow_to_db(url: str, evaluated: Dict[str, Any], raw_result: D
                 await session.flush()
 
             verdict = evaluated.get("flow_verdict", "NO_APLICABLE")
-            score = 100 if verdict == "CUMPLE" else (50 if verdict == "NO_VERIFICABLE" else 0)
 
             auditoria = Auditoria(
                 sitio_id=sitio.id,
                 page_load_status=1,
                 verdict=verdict,
-                score=score,
+                score=None,  # Los flujos se rigen por veredictos de etapa (CUMPLE/NO_CUMPLE/NO_VERIFICABLE), no por score numérico
                 duracion_ms=0,
                 resumen=evaluated.get("flow_verdict_summary", "")[:500],
             )
@@ -128,9 +127,19 @@ async def start_flow_audit(
     Retorna un job_id para consultar el estado con GET /flow-audit/{job_id}.
     El flujo puede tardar 60-75 segundos.
     """
-    url = request.url.strip()
-    if not url:
+    raw_url = request.url.strip()
+    if not raw_url:
         raise HTTPException(status_code=400, detail="La URL no puede estar vacía.")
+
+    try:
+        url, _ = sanitize_url(raw_url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Limpieza de jobs en memoria para evitar crecimiento indefinido
+    if len(_flow_jobs) > 100:
+        for old_k in list(_flow_jobs.keys())[:20]:
+            _flow_jobs.pop(old_k, None)
 
     job_id = str(uuid.uuid4())
     _flow_jobs[job_id] = {

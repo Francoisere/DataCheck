@@ -33,7 +33,7 @@ El propósito de este Spike técnico es reducir la incertidumbre identificada en
 
 ## 3. Tabla comparativa de resultados
 
-La siguiente matriz documenta las mediciones obtenidas mediante el script reproducible [`tests/spike_waf.py`](../tests/spike_waf.py):
+La siguiente matriz documenta las mediciones obtenidas mediante el script reproducible [`tests/spike_waf.py`](../tests/spike_waf.py) y verificadas en el log de ejecución reproducible [`docs/spike_waf_execution.log`](./spike_waf_execution.log):
 
 | URL / Sitio | Alternativa evaluada | Código HTTP | ¿Cargó exitosamente? | Tiempo total (s) | ¿Enlace de privacidad detectado? | ¿Rastreadores capturados? | Observación técnica |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |

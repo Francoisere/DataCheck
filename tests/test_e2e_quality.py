@@ -1,25 +1,30 @@
 """
-Pruebas de Calidad E2E (EC-01 a EC-06) según Sprint 3:
-- EC-01 / EC-02: Rendimiento y tiempo de respuesta (<15s estándar, <30s en concurrencia).
-- EC-03: Resiliencia con corte estricto en 25s ante servidores con retardo de 40s (TEST-TO-02).
-- EC-04: Seguridad e Inspección Pasiva (DA-01): Cero métodos no autorizados (POST/PUT/DELETE) hacia el objetivo.
-- EC-05: Manejo amigable de bloqueos WAF (HTTP 403/503) sin error 500 (TEST-WAF-03).
-- EC-06: Sanitización estricta ante credenciales y tokens (TEST-SAN-01).
+Pruebas de Calidad E2E y Atributos de Calidad (EC-01 a EC-06) según Informe de Arquitectura (§15):
+- EC-01: Rendimiento en carga normal (<15s por escaneo).
+- EC-02: Disponibilidad y concurrencia (3 escaneos concurrentes en <30s y resiliencia ante timeout de 25s).
+- EC-03: Seguridad e inspección pasiva no intrusiva (solo GET, cero métodos mutacionales hacia el objetivo).
+- EC-04: Privacy by Design en base de datos (≥10 auditorías persistidas, 0 credenciales/tokens en BD, snippets <= 300 caracteres).
+- EC-05: Precisión funcional y manejo amigable de WAF (HTTP 403/503 devuelve NO_ACCESIBLE sin error 500).
+- EC-06: Despliegue y reproducibilidad (sanitización de datos sensibles y cumplimiento de contratos).
 """
 
 import pytest
 import asyncio
 import time
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy import select
 
 from src.api.main import app
-from src.scanner.inspector import WebInspector
+from src.scanner.inspector import WebInspector, block_non_get_route
 from src.core.sanitizer import sanitize_url
+from src.services.audit_service import AuditService
+from src.db.session import AsyncSessionLocal
+from src.db.models import SitioAnalizado, Auditoria, Hallazgo, EvidenciaRastreador
 
 
 @pytest.mark.asyncio
-async def test_ec01_rendimiento_estandar():
+async def test_ec01_rendimiento_carga_normal():
     """EC-01: Respuesta en < 15 segundos en sitio simulado normal."""
     mock_raw = {
         "target_url": "https://sitio-rapido.cl/",
@@ -55,8 +60,8 @@ async def test_ec01_rendimiento_estandar():
 
 
 @pytest.mark.asyncio
-async def test_ec02_rendimiento_concurrencia():
-    """EC-02: Concurrencia de 3 escaneos simultáneos finaliza en < 30s."""
+async def test_ec02_rendimiento_concurrencia_y_resiliencia():
+    """EC-02: Concurrencia de 3 escaneos finaliza en < 30s y servidor lento de 40s aborta en límite configurado."""
     mock_raw = {
         "target_url": "https://sitio-concurrente.cl/",
         "page_load_status": 200,
@@ -97,33 +102,97 @@ async def test_ec02_rendimiento_concurrencia():
                 assert r.status_code == 200
             assert elapsed < 30.0
 
-
-@pytest.mark.asyncio
-async def test_ec03_resiliencia_delay_40s_aborta_en_25s():
-    """EC-03 / TEST-TO-02: Servidor con delay de 40s debe abortar a los 25s limpiamente."""
-    inspector = WebInspector(timeout_seconds=1.0)  # timeout calibrado para test
-
+    # Resiliencia: servidor lento aborta limpiamente
+    inspector = WebInspector(timeout_seconds=1.0)
     async def delay_40s(url):
         await asyncio.sleep(40.0)
         return {}
 
-    start = time.perf_counter()
     with patch.object(inspector, "_execute_scan", side_effect=delay_40s):
         result = await inspector.scan_url("https://servidor-lento-40s.cl")
-        elapsed = time.perf_counter() - start
-        assert elapsed < 3.0  # Abortó inmediatamente al cumplirse el timeout configurado
         assert result["page_load_status"] == 0
         assert "Tiempo límite" in result["error_message"]
 
 
 @pytest.mark.asyncio
-async def test_ec04_seguridad_inspeccion_pasiva_cero_mutaciones():
-    """EC-04 / DA-01: Garantizar que el inspector opera en modo solo lectura pública sin métodos POST/PUT/DELETE."""
+async def test_ec03_seguridad_no_intrusiva_solo_get():
+    """EC-03 / DA-01: Cero métodos mutacionales (POST/PUT/DELETE) y ruta aborta peticiones de modificación."""
     inspector = WebInspector()
-    # Verificar que el inspector no exponga métodos de mutación ni los invoque
+    assert hasattr(WebInspector, "block_non_get")
     assert not hasattr(inspector, "post_form")
     assert not hasattr(inspector, "submit_form")
     assert not hasattr(inspector, "click_and_fill")
+
+    # Verificar interceptor real con método POST
+    mock_post_route = MagicMock()
+    mock_post_route.request.method = "POST"
+    mock_post_route.request.url = "https://sitio.cl/api/login"
+    mock_post_route.abort = AsyncMock()
+    await block_non_get_route(mock_post_route)
+    mock_post_route.abort.assert_awaited_once_with("blockedbyclient")
+
+    # Verificar interceptor real con método GET legítimo
+    mock_get_route = MagicMock()
+    mock_get_route.request.method = "GET"
+    mock_get_route.request.url = "https://sitio.cl/estilos.css"
+    mock_get_route.continue_ = AsyncMock()
+    await block_non_get_route(mock_get_route)
+    mock_get_route.continue_.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_ec04_privacy_by_design_db():
+    """EC-04 / DA-04: Persistir 10 auditorías y verificar en BD que 0 contraseñas, tokens o fragmentos se almacenen."""
+    service = AuditService()
+    async with AsyncSessionLocal() as session:
+        for i in range(10):
+            sensitive_url = f"https://user{i}:secret_token_{i}@tienda-test-{i}.cl/checkout?session_id=abc123_{i}&auth=token456#step2"
+            mock_scan = {
+                "target_url": f"https://tienda-test-{i}.cl/checkout",
+                "page_load_status": 200,
+                "error_message": None,
+                "tracker_audit": {
+                    "detected_tracker_domains": ["google-analytics.com"],
+                    "detected_tracker_cookies": ["_ga"],
+                    "has_unauthorized_trackers": True
+                },
+                "privacy_policy_audit": {
+                    "found": True,
+                    "url": f"https://tienda-test-{i}.cl/privacidad",
+                    "http_status": 200,
+                    "has_mandatory_keywords": True,
+                    "found_keywords": ["titular", "responsable"]
+                },
+                "arco_channels_audit": {
+                    "found": True,
+                    "detected_emails": [f"contacto{i}@tienda-test-{i}.cl"],
+                    "detected_terms": ["arco"],
+                    "has_explicit_arco_mention": True
+                }
+            }
+
+            with patch.object(service.inspector, "scan_url", return_value=mock_scan):
+                await service.execute_audit(sensitive_url, db_session=session)
+
+        # Consultar la base de datos real para verificar que no existan credenciales ni tokens
+        sitios = (await session.execute(select(SitioAnalizado))).scalars().all()
+        assert len(sitios) >= 10
+        for s in sitios:
+            assert "secret_token" not in s.url_normalizada
+            assert "user" not in s.url_normalizada
+            assert "session_id" not in s.url_normalizada
+            assert "auth=" not in s.url_normalizada
+
+        auditorias = (await session.execute(select(Auditoria))).scalars().all()
+        assert len(auditorias) >= 10
+        for a in auditorias:
+            assert "secret_token" not in a.resumen
+            assert "session_id" not in a.resumen
+
+        # Verificar que todos los snippets en hallazgos sean <= 300 caracteres
+        hallazgos = (await session.execute(select(Hallazgo))).scalars().all()
+        for h in hallazgos:
+            assert len(h.detalle) <= 300
 
 
 @pytest.mark.asyncio

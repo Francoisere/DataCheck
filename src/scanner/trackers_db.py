@@ -14,6 +14,7 @@ __all__ = [
     "CMP_SIGNATURES",
     "CMP_FRAME_DOMAINS",
     "BANNER_BUTTON_TEXTS",
+    "get_tracker_category",
 ]
 
 KNOWN_TRACKER_DOMAINS = [
@@ -194,3 +195,64 @@ BANNER_BUTTON_TEXTS = [
     "settings", "cookie settings", "manage preferences",
     "necessary only", "essential only",
 ]
+
+# Dominios y sufijos exactos para clasificación libre de falsos positivos (N2)
+SOCIAL_DOMAINS = {
+    "facebook.com", "connect.facebook.net", "pixel.facebook.com",
+    "tiktok.com", "analytics.tiktok.com", "analytics-sg.tiktok.com",
+    "twitter.com", "ads-twitter.com", "static.ads-twitter.com",
+    "linkedin.com", "licdn.com", "snap.licdn.com", "px.ads.linkedin.com",
+    "instagram.com", "pinterest.com"
+}
+SOCIAL_COOKIES = {
+    "_fbp", "_fbc", "fr", "_tt_enable_cookie", "_ttp", "li_sugr", "bcookie", "bscookie"
+}
+
+ADS_DOMAINS = {
+    "doubleclick.net", "googleadservices.com", "googlesyndication.com",
+    "pagead2.googlesyndication.com", "adservice.google.com",
+    "criteo.com", "criteo.net", "taboola.com", "outbrain.com", "adroll.com"
+}
+ADS_COOKIES = {"_gcl_au"}
+
+RECORDING_DOMAINS = {
+    "hotjar.com", "static.hotjar.com", "script.hotjar.com",
+    "clarity.ms", "crazyegg.com", "mouseflow.com", "inspectlet.com"
+}
+RECORDING_COOKIES_EXACT = {
+    "_hjid", "_hjFirstSeen", "_hjAbsoluteSessionInProgress", "_clck", "_clsk"
+}
+RECORDING_COOKIES_PREFIX = ("_hjSession_",)
+
+
+def get_tracker_category(name_or_domain: str) -> str:
+    """
+    Clasifica un rastreador o cookie en categorías normativas:
+    'analítica', 'publicidad', 'redes_sociales', 'grabación_sesión'.
+    Usa coincidencia exacta de cookies y sufijos canónicos de dominio para evitar
+    falsos positivos causados por subcadenas cortas (N2).
+    """
+    raw = name_or_domain.strip().lower()
+    # Si viene con protocolo o ruta (ej. 'facebook.com/tr'), extraer dominio
+    domain = raw.split("://")[-1].split("/")[0].split(":")[0]
+
+    # 1. Redes sociales
+    if raw in SOCIAL_COOKIES:
+        return "redes_sociales"
+    if any(domain == s or domain.endswith("." + s) for s in SOCIAL_DOMAINS):
+        return "redes_sociales"
+
+    # 2. Publicidad
+    if raw in ADS_COOKIES:
+        return "publicidad"
+    if any(domain == a or domain.endswith("." + a) for a in ADS_DOMAINS):
+        return "publicidad"
+
+    # 3. Grabación de sesión / UX
+    if raw in RECORDING_COOKIES_EXACT or any(raw.startswith(p) for p in RECORDING_COOKIES_PREFIX):
+        return "grabación_sesión"
+    if any(domain == r or domain.endswith("." + r) for r in RECORDING_DOMAINS):
+        return "grabación_sesión"
+
+    # 4. Analítica por defecto
+    return "analítica"

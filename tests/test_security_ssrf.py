@@ -68,29 +68,43 @@ async def test_api_scan_returns_400_on_ssrf_attempt():
 
 @pytest.mark.asyncio
 async def test_playwright_interceptor_aborts_non_get_requests():
-    """Caso 5: La rutina de intercepción aborta cualquier método HTTP distinto de GET (POST, PUT, DELETE, PATCH)."""
-    from src.scanner.inspector import WebInspector
-    inspector = WebInspector()
+    """Caso 5: La rutina de intercepción del código real aborta cualquier método HTTP distinto de GET y valida SSRF."""
+    from src.scanner.inspector import block_non_get_route, WebInspector
+    assert hasattr(WebInspector, "block_non_get")
 
     # Simular una petición con método POST
     mock_post_route = MagicMock()
     mock_post_route.request.method = "POST"
+    mock_post_route.request.url = "https://sitio.cl/api/login"
     mock_post_route.abort = AsyncMock()
 
-    # Ejecutar el interceptor
-    # Definimos la misma lógica que _scan_page registra
-    async def block_non_get(route):
-        if route.request.method != "GET":
-            await route.abort("blockedbyclient")
-        else:
-            await route.continue_()
-
-    await block_non_get(mock_post_route)
+    await block_non_get_route(mock_post_route)
     mock_post_route.abort.assert_awaited_once_with("blockedbyclient")
 
     # Simular una petición con método GET legítimo
     mock_get_route = MagicMock()
     mock_get_route.request.method = "GET"
+    mock_get_route.request.url = "https://sitio.cl/estilos.css"
     mock_get_route.continue_ = AsyncMock()
-    await block_non_get(mock_get_route)
+    await block_non_get_route(mock_get_route)
     mock_get_route.continue_.assert_awaited_once()
+
+    # Simular intento de SSRF a IP interna vía GET en subrecurso
+    mock_ssrf_route = MagicMock()
+    mock_ssrf_route.request.method = "GET"
+    mock_ssrf_route.request.url = "http://169.254.169.254/latest/meta-data/"
+    mock_ssrf_route.abort = AsyncMock()
+    await block_non_get_route(mock_ssrf_route)
+    mock_ssrf_route.abort.assert_awaited_once_with("blockedbyclient")
+
+
+def test_ssrf_blocks_cgnat_and_ipv6_loopback():
+    """Caso 6: Bloqueo de CGNAT (100.64.0.0/10) e IPv6 loopback ([::1])."""
+    targets = [
+        "http://100.64.0.1/",
+        "http://100.127.255.254/status",
+        "http://[::1]/admin"
+    ]
+    for url in targets:
+        with pytest.raises(ValueError, match="SSRF"):
+            sanitize_url(url)

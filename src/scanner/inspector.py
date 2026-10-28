@@ -1,3 +1,4 @@
+import logging
 """
 Motor de Inspección Pasiva con Playwright (DA-01, DA-02, DA-04, FB-01, FB-02, FB-03).
 Garantías operativas:
@@ -54,7 +55,60 @@ class TrafficCapture:
                 self.detected_tracker_domains.append(domain)
 
 
+logger = logging.getLogger(__name__)
+_SSRF_HOST_CACHE: Dict[str, bool] = {}
+
+
+def is_ssrf_safe_host(hostname: str) -> bool:
+    """Valida y cachea resoluciones de host en O(1) para no bloquear el event loop (N3)."""
+    cleaned = hostname.strip().lower()
+    if cleaned in _SSRF_HOST_CACHE:
+        return _SSRF_HOST_CACHE[cleaned]
+    try:
+        from src.core.sanitizer import validate_ssrf
+        validate_ssrf(cleaned)
+        _SSRF_HOST_CACHE[cleaned] = True
+        return True
+    except Exception:
+        _SSRF_HOST_CACHE[cleaned] = False
+        return False
+
+
+async def block_non_get_route(route, request=None) -> None:
+    """
+    FB-01 / DA-01: Interceptor estricto de red.
+    - Aborta inmediatamente cualquier método HTTP que no sea GET (POST, PUT, DELETE, PATCH).
+    - Valida contra SSRF y puertos no permitidos cualquier destino solicitado con caché de host O(1).
+    - Registra en logs cualquier petición bloqueada para trazabilidad técnica (N3).
+    """
+    req = request if request is not None else route.request
+    if req.method != "GET":
+        logger.debug(f"[Interceptor] Abortada petición no-GET ({req.method}): {req.url[:120]}")
+        await route.abort("blockedbyclient")
+        return
+
+    try:
+        url = req.url
+        parsed = urllib.parse.urlsplit(url)
+        if parsed.scheme.lower() in ("http", "https") and parsed.hostname:
+            if not is_ssrf_safe_host(parsed.hostname):
+                logger.warning(f"[Interceptor] Bloqueado destino restringido o SSRF: {parsed.hostname}")
+                await route.abort("blockedbyclient")
+                return
+            if parsed.port and parsed.port not in (80, 443):
+                logger.warning(f"[Interceptor] Bloqueado puerto no autorizado: {parsed.port}")
+                await route.abort("blockedbyclient")
+                return
+    except Exception as e:
+        logger.debug(f"[Interceptor] Excepción validando ruta {req.url[:120]}: {e}")
+        await route.abort("blockedbyclient")
+        return
+
+    await route.continue_()
+
+
 class WebInspector:
+    block_non_get = staticmethod(block_non_get_route)
     def __init__(
         self,
         timeout_seconds: float = settings.SCAN_TIMEOUT_SECONDS,
@@ -114,7 +168,8 @@ class WebInspector:
                 "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
                 "--disable-accelerated-2d-canvas",
-                "--disable-gpu"
+                "--disable-gpu",
+                "--disable-blink-features=AutomationControlled"
             ]
             try:
                 browser = await p.chromium.launch(headless=True, args=launch_args)
@@ -137,17 +192,11 @@ class WebInspector:
                 )
                 self._active_context = context
 
-                # FB-01: Intercepción estricta: abortar cualquier petición que no sea HTTP GET
-                async def block_non_get(route, request):
-                    if request.method != "GET":
-                        await route.abort("blockedbyclient")
-                    else:
-                        await route.continue_()
-
-                await context.route("**/*", block_non_get)
+                # FB-01: Intercepcion estricta: abortar cualquier peticion que no sea HTTP GET
+                await context.route("**/*", block_non_get_route)
 
                 page: Page = await context.new_page()
-                await page.route("**/*", block_non_get)
+                await page.route("**/*", block_non_get_route)
 
                 # Listener pasivo de tráfico de red
                 page.on("request", traffic_capture.handle_request)

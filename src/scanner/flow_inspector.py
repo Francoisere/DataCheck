@@ -27,6 +27,7 @@ from bs4 import BeautifulSoup
 from src.core.sanitizer import sanitize_url
 from .trackers_db import KNOWN_TRACKER_DOMAINS, is_tracker_cookie
 from .stage_patterns import FLOW_STAGES, PAYMENT_GATEWAY_DOMAINS
+from .inspector import block_non_get_route
 
 
 class StageCapture:
@@ -93,6 +94,7 @@ class FlowInspector:
                     "--disable-dev-shm-usage",
                     "--disable-accelerated-2d-canvas",
                     "--disable-gpu",
+                    "--disable-blink-features=AutomationControlled",
                 ],
             )
             context: Optional[BrowserContext] = None
@@ -105,20 +107,14 @@ class FlowInspector:
                         "Chrome/124.0.0.0 Safari/537.36 (DataCheck.cl/2.0; Academic Flow Audit)"
                     ),
                     viewport={"width": 1280, "height": 800},
-                    ignore_https_errors=True,
+                    ignore_https_errors=False,
                 )
 
-                # FB-01: Intercepción estricta para bloquear peticiones no-GET en flujos
-                async def block_non_get(route, request):
-                    if request.method != "GET":
-                        await route.abort("blockedbyclient")
-                    else:
-                        await route.continue_()
-
-                await context.route("**/*", block_non_get)
+                # FB-01: Intercepcion estricta para bloquear peticiones no-GET en flujos
+                await context.route("**/*", block_non_get_route)
 
                 page: Page = await context.new_page()
-                await page.route("**/*", block_non_get)
+                await page.route("**/*", block_non_get_route)
 
                 stages_results: List[Dict[str, Any]] = []
                 cookies_seen_so_far: Set[str] = set()

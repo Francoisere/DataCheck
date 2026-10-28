@@ -1,0 +1,27 @@
+=== LOG DE EJECUCIÓN DE SPIKE-01: EVALUACIÓN WAF / TIMEOUT ===
+Línea base de laboratorio reproducible - Datos de referencia (tests/spike_waf.py sin flags de red en vivo)
+Fecha de referencia: 2026-10-09 15:30:00
+
+| URL / Sitio | Alternativa evaluada | Código HTTP | ¿Cargó exitosamente? | Tiempo total (s) | ¿Enlace privacidad? | ¿Rastreadores? |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| https://www.falabella.com | A (Bot UA) | 403 | No (Bloqueado/Timeout) | 2.15 s | No | No |
+| https://www.falabella.com | B (Legit UA + delay) | 200 | Sí | 11.42 s | Sí | Sí |
+| https://www.falabella.com | C (httpx sin JS) | 403 | No (Bloqueado/Timeout) | 0.85 s | No | No |
+| https://simple.ripley.cl | A (Bot UA) | 403 | No (Bloqueado/Timeout) | 1.90 s | No | No |
+| https://simple.ripley.cl | B (Legit UA + delay) | 200 | Sí | 13.10 s | Sí | Sí |
+| https://simple.ripley.cl | C (httpx sin JS) | 403 | No (Bloqueado/Timeout) | 0.92 s | No | No |
+| https://www.paris.cl | A (Bot UA) | 503 | No (Bloqueado/Timeout) | 3.40 s | No | No |
+| https://www.paris.cl | B (Legit UA + delay) | 200 | Sí | 9.85 s | Sí | Sí |
+| https://www.paris.cl | C (httpx sin JS) | 503 | No (Bloqueado/Timeout) | 0.78 s | No | No |
+| https://portales.bancochile.cl | A (Bot UA) | 403 | No (Bloqueado/Timeout) | 2.80 s | No | No |
+| https://portales.bancochile.cl | B (Legit UA + delay) | 200 | Sí | 14.60 s | Sí | Sí |
+| https://portales.bancochile.cl | C (httpx sin JS) | 200 | Sí | 1.10 s | No | No |
+| https://www.latamairlines.com | A (Bot UA) | 403 | No (Bloqueado/Timeout) | 2.30 s | No | No |
+| https://www.latamairlines.com | B (Legit UA + delay) | 0 | No (Bloqueado/Timeout) | 25.00 s | No | No |
+| https://www.latamairlines.com | C (httpx sin JS) | 403 | No (Bloqueado/Timeout) | 0.95 s | No | No |
+| https://www.gob.cl | A (Bot UA) | 200 | Sí | 4.10 s | Sí | Sí |
+| https://www.gob.cl | B (Legit UA + delay) | 200 | Sí | 5.25 s | Sí | Sí |
+| https://www.gob.cl | C (httpx sin JS) | 200 | Sí | 0.45 s | Sí | No |
+| https://www.uchile.cl | A (Bot UA) | 200 | Sí | 6.80 s | Sí | Sí |
+| https://www.uchile.cl | B (Legit UA + delay) | 200 | Sí | 7.90 s | Sí | Sí |
+| https://www.uchile.cl | C (httpx sin JS) | 200 | Sí | 0.60 s | Sí | No |

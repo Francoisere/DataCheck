@@ -1,5 +1,5 @@
 # Matriz Oficial de Trazabilidad y Congelamiento de Requerimientos (DataCheck.cl)
-**Versión:** 2.0 (Incremento 2 / Primera Defensa)  
+**Versión:** 2.0 (Incremento 1 y 2 / Segunda Defensa)  
 **Normativa Referencial:** Ley N° 19.628 y Nueva Ley N° 21.719 sobre Protección de Datos Personales (Chile)  
 **Estado:** CONGELADA Y AUDITADA (FB-05)
 
@@ -7,12 +7,12 @@
 
 ## 1. Alcance y Regla de Unificación de Identificadores
 
-Conforme a las observaciones de retroalimentación docente (**FB-05**), se establece la presente matriz única como la fuente de verdad inmutable de requerimientos, eliminando toda discrepancia previa entre actas, tickets y documentación técnica.
+Conforme a las observaciones de retroalimentación (**FB-05**), se establece la presente matriz única como la fuente de verdad inmutable de requerimientos, eliminando toda discrepancia previa entre actas, tickets y documentación técnica.
 
 ### Definiciones Base:
 * **RF (Requerimiento Funcional)**: Capacidades operativas y legales del sistema.
 * **PBI (Product Backlog Item)**: Unidades de implementación técnica y desarrollo.
-* **CA (Criterio de Aceptación)**: Condiciones verificables de satisfacción.
+* **AC (Criterio de Aceptación)**: Condiciones verificables de satisfacción.
 * **EVI / TEST (Evidencia Técnica)**: Suites de prueba automatizada y registros empíricos.
 
 ---
@@ -21,35 +21,39 @@ Conforme a las observaciones de retroalimentación docente (**FB-05**), se estab
 
 | ID RF | Denominación Oficial | ID PBI | Descripción Técnica | Componente / Archivo | Criterios de Aceptación | Suite de Pruebas (EVI) |
 |---|---|---|---|---|---|---|
-| **RF-01** | Detección y catalogación de rastreadores y cookies pre-consentimiento | **PBI-01** | Motor de extracción headless con Playwright y captura de tráfico HTTP pasivo en red. | `src/scanner/inspector.py`<br/>`src/scanner/flow_inspector.py` | • Detección en modo solo lectura (`GET`).<br/>• Intercepción de scripts de terceros pre-consentimiento.<br/>• Detección de banners y Shadow DOM. | `tests/test_sanitizer.py`<br/>`tests/test_iframe_cmp.py`<br/>`tests/test_security_ssrf.py` |
-| **RF-02** | Verificación de disponibilidad y contenido de Política de Privacidad | **PBI-02** | Verificador de enlaces en footer institucional, respuesta HTTP 200 y keywords obligatorias. | `src/scanner/inspector.py`<br/>`src/core/legal_catalog.py` | • Detección de enlaces canónicos `/privacidad`.<br/>• Validación de HTTP 200.<br/>• Verificación de deberes del responsable (Art. 14 ter). | `tests/test_rules_engine.py`<br/>`tests/test_responsible_party.py` |
-| **RF-03** | Identificación de canales formales para ejercicio de derechos ARCO | **PBI-03** | Parser de correos dedicados (`mailto:`) y menciones explícitas de derechos ARCO. | `src/scanner/inspector.py`<br/>`src/scanner/remediation_catalog.py` | • Localización de email formal o formulario.<br/>• Mención expresa a Acceso, Rectificación, Cancelación, Oposición.<br/>• Generación de ticket con plantilla de código. | `tests/test_rules.py`<br/>`tests/test_rules_engine.py` |
-| **RF-04** | Dictamen técnico determinista y reporte estructurado en PDF | **PBI-04** / **PBI-06** | Motor determinista ponderado (35/30/35) y compilador de informe legal descargable. | `src/scanner/rules_engine.py`<br/>`src/services/pdf_report_service.py` | • Veredictos: `APROBADO`, `CON_OBSERVACIONES`, `RECHAZADO`, `NO_ACCESIBLE`.<br/>• Compilación PDF < 3.0s y tamaño > 0 KB.<br/>• Sustento normativo de Ley 21.719 en cada hallazgo. | `tests/test_pdf_report.py`<br/>`tests/test_pdf_generation.py` |
-| **RF-SEC** | Seguridad perimetral, resiliencia y mitigación de desvíos | **PBI-05** | Middleware de protección Anti-SSRF, timeout de 25s y neutralidad WAF. | `src/core/sanitizer.py`<br/>`src/api/routes/scan.py`<br/>`src/services/audit_service.py` | • Bloqueo de loopback, RFC 1918 y cloud metadata.<br/>• Límite temporal infranqueable de 24s/25s.<br/>• Estado neutro `NO_ACCESIBLE` ante Cloudflare/403/503. | `tests/test_security_ssrf.py`<br/>`tests/test_resilience_timeout.py`<br/>`tests/test_e2e_quality.py` |
+| **RF-01** | Detección y catalogación de rastreadores y cookies pre-consentimiento | **PBI-01** | Motor de extracción headless con Playwright y captura de tráfico HTTP pasivo en red. | `src/scanner/inspector.py` | • Detección en modo solo lectura (`GET`).<br/>• Intercepción de scripts de terceros pre-consentimiento.<br/>• Clasificación por dominios y cookies no esenciales. | `tests/test_sanitizer.py`<br/>`tests/test_security_ssrf.py` |
+| **RF-02** | Detección de gestores de consentimiento (CMP) y Shadow DOM | **PBI-02** | Inspección de iframes de terceros y árboles Shadow DOM (open/closed) para auditar banners. | `src/scanner/consent_detector.py` | • Detección de botones de aceptación y rechazo.<br/>• Identificación de banners de 2 pasos.<br/>• Evaluación de Shadow DOM cerrado. | `tests/test_iframe_cmp.py` |
+| **RF-03** | Generación de catálogo normativo de tickets técnicos de remediación | **PBI-03** | Catálogo estructurado de remediación con fragmentos de código listos para producción. | `src/scanner/remediation_catalog.py` | • Códigos de tickets (`TICK-TRK-01`, `TICK-POL-01`, etc.).<br/>• Pautas técnicas de corrección inmediata.<br/>• Sustento en Ley 21.719. | `tests/test_rules_engine.py`<br/>`tests/test_legal_catalog.py` |
+| **RF-04** | Generación y exportación de reporte técnico en formato PDF | **PBI-04** | Compilación de informes PDF descargables en memoria con ReportLab con paridad visual. | `src/services/pdf_report_service.py`<br/>`src/api/routes/reports.py` | • Compilación en < 3.0 s.<br/>• Paridad visual con hallazgos, banners y responsable.<br/>• Botón deshabilitado antes de auditar. | `tests/test_pdf_report.py` |
+| **RF-05** | Recorrido pasivo de flujos multietapa de compra y registro | **PBI-05** | Inspección secuencial de hasta 4 etapas (inicio, catálogo, registro, checkout) sin mutación. | `src/scanner/flow_inspector.py`<br/>`src/scanner/flow_rules.py` | • 0 clics, 0 fills, 0 submits.<br/>• Preservación de cookie jar.<br/>• Detección de pasarelas externas. | `tests/test_flow_audit.py` |
+| **RF-06** | Calendarización periódica de re-auditorías con alertas por email | **PBI-06** | Planificador en segundo plano con integración SMTP (Mailpit/externo) y notificación PDF. | `src/services/schedule_service.py`<br/>`src/services/email_service.py` | • Intervalos demo (2 min) y producción.<br/>• Generación automática de informe actualizado.<br/>• Envío de correo con enlace al reporte. | `tests/test_scheduler.py` |
+| **RF-SEC** | Seguridad perimetral, resiliencia y mitigación de desvíos WAF | **SPIKE-01** | Middleware de protección anti-SSRF, timeout de 25s, argumentos anti-detección y estado neutro. | `src/core/sanitizer.py`<br/>`src/scanner/inspector.py`<br/>`src/services/audit_service.py` | • Restricción a puertos 80/443 y anti-SSRF.<br/>• Límite forzado de timeout de 25s.<br/>• Estado neutro `NO_ACCESIBLE` ante WAF 403/503. | `tests/test_security_ssrf.py`<br/>`tests/test_resilience_timeout.py`<br/>`tests/test_e2e_quality.py` |
 
 ---
 
 ## 3. Desglose Estandarizado de Product Backlog Items (PBI)
 
-* **PBI-01**: *Motor de Extracción Headless y Captura de Tráfico HTTP*.
+* **PBI-01**: *Inspección pasiva del landing y cálculo de los 3 pilares normativos*.
   * Ejecución en contenedor Chromium sin mutación de estado.
   * Captura asíncrona de eventos de red y cookies en el primer milisegundo pre-consentimiento.
-* **PBI-02**: *Verificador de Accesibilidad de Políticas de Privacidad*.
-  * Rastreo de hipervínculos en DOM principal y sub-marcos.
-  * Verificación de código de estado HTTP 200 y búsqueda de vocabulario jurídico esencial.
-* **PBI-03**: *Motor de Evaluación Determinista de Reglas (Ley 21.719)*.
-  * Asignación matemática de ponderaciones: 35% Política, 30% ARCO, 35% Consentimiento.
-  * Catálogo de tickets técnicos de remediación con fragmentos de código listos para producción.
-* **PBI-04**: *Dashboard Web Interactivo con Semáforo y Visualización de Remediación*.
-  * Interfaz accesible (Dark/Light mode) con anillo de puntaje SVG nativo.
-  * Botón interactivo de copiado al portapapeles de tickets de remediación para desarrolladores.
-* **PBI-05**: *Middleware de Seguridad Perimetral y Resiliencia Técnica*.
-  * Validación estricta anti-SSRF (DNS resolution + filtro IP loopback/privada/cloud).
-  * Control de timeout global con `force_close()` garantizando 0 procesos huérfanos.
-  * Manejo neutro de bloqueos de WAF (`NO_ACCESIBLE` con hallazgo `ACCESIBILIDAD_PERIMETRAL`).
-* **PBI-06**: *Generador Oficial de Reportes PDF con Sustento Legal*.
-  * Generación en memoria con ReportLab en menos de 3.0 segundos.
-  * Incorporación de artículos de la Ley 21.719, principios y sanciones estimadas ante la APDP.
+* **PBI-02**: *Detección y auditoría de banners CMP y encapsulamiento en Shadow DOM*.
+  * Rastreo de iframes cross-origin y árboles Shadow DOM abiertos y cerrados.
+  * Evaluación de simetría de opciones de consentimiento (aceptar vs. rechazar).
+* **PBI-03**: *Catálogo normativo de tickets técnicos de remediación accionables*.
+  * Asignación matemática de ponderaciones: 35 pts Política, 30 pts ARCO, 35 pts Consentimiento.
+  * Catálogo de tickets técnicos de remediación con fragmentos de código listos para producción (`remediation_catalog.py`).
+* **PBI-04**: *Generación y descarga de reporte técnico en formato PDF*.
+  * Compilación en memoria con ReportLab en menos de 3.0 segundos.
+  * Paridad total con la vista en pantalla (responsable Art. 14 ter, banners, iframes y tickets).
+* **PBI-05**: *Recorrido pasivo de flujos multietapa de compra/registro*.
+  * Recorrido secuencial pasivo de hasta 4 etapas: inicio, catálogo, registro, checkout.
+  * Detección de pasarelas de pago chilenas e internacionales.
+* **PBI-06**: *Calendarización periódica de re-auditorías con alertas por email*.
+  * Servicio de agendamiento y worker en segundo plano para verificación de remediación.
+  * Notificación automática por email vía servidor SMTP.
+* **SPIKE-01**: *Evaluación de evasión pasiva de WAF/Cloudflare y límite de timeout*.
+  * Reducción de incertidumbre sobre sitios protegidos por Cloudflare/Akamai/F5.
+  * Adopción de emulación con User-Agent legítimo, pausas de 1.5s y timeout de 25s.
 
 ---
 
@@ -57,9 +61,11 @@ Conforme a las observaciones de retroalimentación docente (**FB-05**), se estab
 
 | Código | Evidencia Verificable | Test Suite Asociado | Métrica de Aceptación |
 |---|---|---|---|
-| **EVI-01** | Bloqueo absoluto de SSRF (IPv4/IPv6 privada, localhost, 169.254.169.254). | `tests/test_security_ssrf.py` | 100% de payloads maliciosos rechazados con HTTP 400. |
-| **EVI-02** | Aborto garantizado de métodos no-GET en navegación Playwright. | `tests/test_security_ssrf.py` | Peticiones POST/PUT/DELETE abortadas con `blockedbyclient`. |
-| **EVI-03** | Manejo de WAF/Cloudflare (HTTP 403/503) como veredicto neutro. | `tests/test_rules_engine.py`<br/>`tests/test_e2e_quality.py` | Veredicto `NO_ACCESIBLE` con puntaje 0 y ticket de bypass WAF. |
-| **EVI-04** | Resiliencia temporal: Corte a los 24s y liberación de procesos. | `tests/test_resilience_timeout.py`<br/>`tests/test_e2e_quality.py` | Respuesta en $\le 25.0$ s y 0 procesos de Chromium activos. |
-| **EVI-05** | Entrega de snippets de código ejecutables en 100% de tickets. | `tests/test_rules_engine.py` | Campo `remediation_ticket` no vacío con directiva y código. |
-| **EVI-06** | Generación de informe PDF en $< 3.0$ s y peso $> 0$ KB. | `tests/test_pdf_report.py`<br/>`tests/test_pdf_generation.py` | Archivo binario `%PDF-` generado en buffer sin fallas de memoria. |
+| **EVI-01** | Bloqueo absoluto de SSRF (IPv4/IPv6 privada, localhost, CGNAT, 169.254.169.254, puertos != 80/443). | `tests/test_security_ssrf.py` | 100% de payloads maliciosos rechazados con HTTP 400. |
+| **EVI-02** | Resiliencia ante servidores con retardo de 40s (corte en 25s con force_close). | `tests/test_resilience_timeout.py` | Aborto en ≤ 25s con `page_load_status = 0` y cero procesos huérfanos. |
+| **EVI-03** | Calibración empírica en 10 sitios reales y tasa de falsos positivos. | `src/scanner/benchmark.py`<br/>`docs/benchmark_10_sitios.md` | Tasa de falsos positivos < 10% (0 falsos positivos en muestra de control). |
+| **EVI-04** | Evaluación determinista de reglas según Ley 21.719 y Art. 14 ter. | `tests/test_rules_engine.py`<br/>`tests/test_responsible_party.py` | 100% de casos normativos dictaminados con tickets asignados. |
+| **EVI-05** | Compilación de reporte PDF y paridad con vista web. | `tests/test_pdf_report.py` | Generación de buffer PDF en < 3.0 s. |
+| **EVI-06** | Auditoría pasiva de flujos multietapa de compra/registro. | `tests/test_flow_audit.py` | 4 etapas evaluadas con 0 clics, 0 fills y 0 submits. |
+| **EVI-07** | Re-auditorías programadas y despacho de alertas SMTP. | `tests/test_scheduler.py` | Creación de tarea, verificación de veredicto y envío de email. |
+| **EVI-08** | Suite integral de calidad E2E y Privacy by Design en base de datos. | `tests/test_e2e_quality.py` | 0 credenciales ni tokens en BD, snippets <= 300 caracteres, concurrencia en < 30s. |

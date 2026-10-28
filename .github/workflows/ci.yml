@@ -2,9 +2,9 @@ name: CI Pipeline DataCheck.cl
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
 
 jobs:
   test:
@@ -36,4 +36,3 @@ jobs:
           SCAN_TIMEOUT_SECONDS: "25.0"
         run: |
           python -m pytest -v --tb=short
-

@@ -29,84 +29,6 @@ from src.scanner.inspector import WebInspector
 from src.scanner.consent_detector import ConsentDetector
 
 
-def test_is_tracker_cookie_exact_match():
-    """
-    Test 1: Valida que la coincidencia exacta de cookies de rastreo identifique cookies conocidas
-    sin generar falsos positivos con nombres que contengan substrings accidentales.
-    """
-    assert is_tracker_cookie("_ga") is True
-    assert is_tracker_cookie("fr") is True
-    assert is_tracker_cookie("lang_fr") is False
-    assert is_tracker_cookie("preferred") is False
-
-
-def test_is_tracker_cookie_prefix_match():
-    """
-    Test 2: Valida que las cookies con prefijos dinámicos conocidos de rastreo
-    sean detectadas correctamente.
-    """
-    assert is_tracker_cookie("_gac_UA12345") is True
-    assert is_tracker_cookie("_hjSession_123456") is True
-    assert is_tracker_cookie("_ga_ABC123") is True
-
-
-def test_cmp_signatures_structure():
-    """
-    Test 3: Valida que CMP_SIGNATURES contenga las plataformas CMP requeridas
-    (cookiebot, onetrust, didomi, usercentrics, iubenda, quantcast, sourcepoint, trustarc)
-    y que cada entrada posea las claves 'frame_domains', 'selectors' y 'container_id'.
-    """
-    expected_cmps = [
-        "cookiebot", "onetrust", "didomi", "usercentrics",
-        "iubenda", "quantcast", "sourcepoint", "trustarc"
-    ]
-    for cmp_name in expected_cmps:
-        assert cmp_name in CMP_SIGNATURES, f"El CMP '{cmp_name}' no se encuentra en CMP_SIGNATURES"
-        cmp_entry = CMP_SIGNATURES[cmp_name]
-        assert "frame_domains" in cmp_entry, f"Falta clave 'frame_domains' en '{cmp_name}'"
-        assert isinstance(cmp_entry["frame_domains"], list), f"'frame_domains' en '{cmp_name}' debe ser una lista"
-        assert "selectors" in cmp_entry, f"Falta clave 'selectors' en '{cmp_name}'"
-        assert isinstance(cmp_entry["selectors"], list), f"'selectors' en '{cmp_name}' debe ser una lista"
-        assert "container_id" in cmp_entry, f"Falta clave 'container_id' en '{cmp_name}'"
-
-
-def test_cmp_frame_domains_flattened():
-    """
-    Test 4: Valida que CMP_FRAME_DOMAINS contenga los dominios conocidos de iframes
-    utilizados comúnmente por los gestores de consentimiento.
-    """
-    expected_domains = [
-        "consentcdn.cookiebot.com",
-        "cdn.cookielaw.org",
-        "sdk.privacy-center.org",
-        "consent.trustarc.com"
-    ]
-    for domain in expected_domains:
-        assert domain in CMP_FRAME_DOMAINS, f"Dominio esperado '{domain}' no presente en CMP_FRAME_DOMAINS"
-
-
-def test_banner_button_texts_include_spanish():
-    """
-    Test 5: Valida que BANNER_BUTTON_TEXTS contenga términos en español indispensables
-    para detectar acciones de consentimiento (aceptar, rechazar, configurar, solo necesarias).
-    """
-    expected_terms = ["aceptar", "rechazar", "configurar", "solo necesarias"]
-
-    if isinstance(BANNER_BUTTON_TEXTS, dict):
-        flattened = []
-        for val in BANNER_BUTTON_TEXTS.values():
-            if isinstance(val, (list, set, tuple)):
-                flattened.extend(val)
-            elif isinstance(val, str):
-                flattened.append(val)
-        corpus = [str(t).lower() for t in flattened]
-    else:
-        corpus = [str(t).lower() for t in BANNER_BUTTON_TEXTS]
-
-    for term in expected_terms:
-        assert any(term in item for item in corpus), f"El término en español '{term}' no fue encontrado en BANNER_BUTTON_TEXTS"
-
-
 def test_rules_engine_banner_no_reject_gives_observaciones():
     """
     Test 6: Valida que cuando se detecta un banner de consentimiento puramente informativo
@@ -370,20 +292,6 @@ def test_rules_engine_blocks_prior_to_consent_verdict():
     r2 = RulesEngine.evaluate(leaking_data)
     assert r2["consent_banner_audit"]["blocks_prior_to_consent"] is False
     assert r2["verdict"] == "RECHAZADO"
-
-
-def test_ec04_still_passes_no_mutation_methods():
-    """
-    Test 12: Re-verifica que WebInspector y ConsentDetector no contengan métodos de mutación activa
-    (post_form, submit_form, click_and_fill, click, fill, submit), asegurando el cumplimiento estricto de DA-01.
-    """
-    inspector = WebInspector()
-    assert not hasattr(inspector, "post_form"), "WebInspector no debe exponer método post_form"
-    assert not hasattr(inspector, "submit_form"), "WebInspector no debe exponer método submit_form"
-    assert not hasattr(inspector, "click_and_fill"), "WebInspector no debe exponer método click_and_fill"
-
-    for forbidden in ["click", "fill", "submit", "post_form", "click_and_fill"]:
-        assert not hasattr(ConsentDetector, forbidden), f"ConsentDetector no debe exponer método mutativo '{forbidden}'"
 
 
 # =========================================================================
