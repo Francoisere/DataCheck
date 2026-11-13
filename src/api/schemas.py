@@ -27,6 +27,7 @@ class RemediationFinding(BaseModel):
     title: str = Field(..., description="Título técnico descriptivo")
     detail: str = Field(..., description="Detalle técnico del hallazgo (máx. 300 caracteres)")
     technical_raw: Optional[str] = Field(None, description="Dato técnico crudo (dominio, cookie, código HTTP)")
+    items: Optional[List[str]] = Field(default=None, description="Lista de elementos detectados con su clasificación de invasividad")
     remediation_ticket: str = Field(..., description="Ticket técnico con recomendación accionable para desarrolladores")
     # Sustento normativo Ley 21.719
     articulo_ley: Optional[str] = Field(None, description="Artículo legal vulnerado o conforme (Ley 21.719)")

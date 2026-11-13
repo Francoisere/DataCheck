@@ -14,7 +14,12 @@ __all__ = [
     "CMP_SIGNATURES",
     "CMP_FRAME_DOMAINS",
     "BANNER_BUTTON_TEXTS",
+    "TAG_MANAGER_DOMAINS",
+    "LOW_INVASIVENESS_COOKIES",
+    "INVASIVENESS_WEIGHTS",
     "get_tracker_category",
+    "get_tracker_invasiveness",
+    "calculate_trackers_penalty",
 ]
 
 KNOWN_TRACKER_DOMAINS = [
@@ -219,15 +224,42 @@ ADS_DOMAINS = {
     "criteo.com", "criteo.net", "taboola.com", "outbrain.com", "adroll.com"
 }
 ADS_COOKIES = {"_gcl_au"}
+ADS_COOKIES_PREFIX = ("_gac_",)
 
 RECORDING_DOMAINS = {
     "hotjar.com", "static.hotjar.com", "script.hotjar.com",
     "clarity.ms", "crazyegg.com", "mouseflow.com", "inspectlet.com"
 }
 RECORDING_COOKIES_EXACT = {
-    "_hjid", "_hjFirstSeen", "_hjAbsoluteSessionInProgress", "_clck", "_clsk"
+    "_hjid", "_hjfirstseen", "_hjabsolutesessioninprogress", "_clck", "_clsk"
 }
-RECORDING_COOKIES_PREFIX = ("_hjSession_",)
+RECORDING_COOKIES_PREFIX = ("_hjsession_",)
+
+# Nivel de invasividad y pesos de penalización sobre el pilar Consentimiento & Cookies (35 pts)
+TAG_MANAGER_DOMAINS = {"googletagmanager.com"}
+LOW_INVASIVENESS_COOKIES = {"_gat", "__hssrc", "_tt_enable_cookie"}
+
+INVASIVENESS_WEIGHTS = {
+    "BAJA": 1,
+    "MEDIA": 2,
+    "ALTA": 3,
+    "CRITICA": 4,
+}
+
+_LEVEL_ORDER = {
+    "NINGUNA": 0,
+    "BAJA": 1,
+    "MEDIA": 2,
+    "ALTA": 3,
+    "CRITICA": 4,
+}
+
+_LEVEL_DESCRIPTIONS = {
+    "BAJA": "Gestor de etiquetas o cookie técnica de limitación de tasa/estado sin perfilamiento individual",
+    "MEDIA": "Analítica estadística agregada o medición de audiencia",
+    "ALTA": "Grabación de sesión, reproducción de interacciones o mapa de calor",
+    "CRITICA": "Publicidad conductual, retargeting cross-site o píxel de red social",
+}
 
 
 def get_tracker_category(name_or_domain: str) -> str:
@@ -248,7 +280,7 @@ def get_tracker_category(name_or_domain: str) -> str:
         return "redes_sociales"
 
     # 2. Publicidad
-    if raw in ADS_COOKIES:
+    if raw in ADS_COOKIES or any(raw.startswith(p) for p in ADS_COOKIES_PREFIX):
         return "publicidad"
     if any(domain == a or domain.endswith("." + a) for a in ADS_DOMAINS):
         return "publicidad"
@@ -261,3 +293,64 @@ def get_tracker_category(name_or_domain: str) -> str:
 
     # 4. Analítica por defecto
     return "analítica"
+
+
+def get_tracker_invasiveness(name_or_domain: str) -> dict:
+    """
+    Clasifica un dominio o cookie de rastreo según su nivel de invasividad
+    y retorna el peso de penalización correspondiente en el pilar Consentimiento (35 pts):
+    - BAJA (-1 pt): Gestores de etiquetas y cookies técnicas de control de tasa/estado.
+    - MEDIA (-2 pts): Analítica estadística agregada.
+    - ALTA (-3 pts): Grabación de sesión y mapas de calor.
+    - CRITICA (-4 pts): Publicidad conductual, retargeting y píxeles de redes sociales.
+    """
+    raw = name_or_domain.strip().lower()
+    domain = raw.split("://")[-1].split("/")[0].split(":")[0]
+
+    if any(domain == t or domain.endswith("." + t) for t in TAG_MANAGER_DOMAINS):
+        category = "gestor_etiquetas"
+        level = "BAJA"
+    elif raw in LOW_INVASIVENESS_COOKIES:
+        category = get_tracker_category(name_or_domain)
+        level = "BAJA"
+    else:
+        category = get_tracker_category(name_or_domain)
+        if category in ("publicidad", "redes_sociales"):
+            level = "CRITICA"
+        elif category == "grabación_sesión":
+            level = "ALTA"
+        else:
+            level = "MEDIA"
+
+    return {
+        "item": name_or_domain,
+        "category": category,
+        "level": level,
+        "penalty": INVASIVENESS_WEIGHTS[level],
+        "description": _LEVEL_DESCRIPTIONS[level],
+    }
+
+
+def calculate_trackers_penalty(domains: list, cookies: list) -> dict:
+    """
+    Calcula la penalización gradual acumulada para las listas de dominios
+    y cookies detectadas pre-consentimiento.
+    """
+    domain_penalties = [get_tracker_invasiveness(d) for d in (domains or [])]
+    cookie_penalties = [get_tracker_invasiveness(c) for c in (cookies or [])]
+
+    domain_penalty_sum = sum(p["penalty"] for p in domain_penalties)
+    cookie_penalty_sum = sum(p["penalty"] for p in cookie_penalties)
+    total_penalty = domain_penalty_sum + cookie_penalty_sum
+
+    all_levels = [p["level"] for p in domain_penalties + cookie_penalties]
+    max_level = max(all_levels, key=lambda lvl: _LEVEL_ORDER[lvl]) if all_levels else "NINGUNA"
+
+    return {
+        "total_penalty": total_penalty,
+        "domain_penalties": domain_penalties,
+        "cookie_penalties": cookie_penalties,
+        "domain_penalty_sum": domain_penalty_sum,
+        "cookie_penalty_sum": cookie_penalty_sum,
+        "max_level": max_level,
+    }

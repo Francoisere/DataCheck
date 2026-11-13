@@ -280,7 +280,7 @@ def test_rules_engine_blocks_prior_to_consent_verdict():
     r1 = RulesEngine.evaluate(clean_data)
     assert r1["consent_banner_audit"]["blocks_prior_to_consent"] is True
 
-    # Caso 2: No bloquea
+    # Caso 2: No bloquea con rastreadores de invasividad media (-2 + -2 = -4 -> 31/35, CON_OBSERVACIONES)
     leaking_data = {
         "target_url": "https://no-bloquea.cl/",
         "page_load_status": 200,
@@ -291,7 +291,32 @@ def test_rules_engine_blocks_prior_to_consent_verdict():
     }
     r2 = RulesEngine.evaluate(leaking_data)
     assert r2["consent_banner_audit"]["blocks_prior_to_consent"] is False
-    assert r2["verdict"] == "RECHAZADO"
+    assert r2["pilares"]["consentimiento_cookies"]["score"] == 31
+    assert r2["verdict"] == "CON_OBSERVACIONES"
+
+    # Caso 3: No bloquea y presenta carga severa de rastreadores críticos/altos (-35 pts -> 0/35, RECHAZADO)
+    critical_leaking_data = {
+        "target_url": "https://no-bloquea-critico.cl/",
+        "page_load_status": 200,
+        "tracker_audit": {
+            "has_unauthorized_trackers": True,
+            "detected_tracker_domains": [
+                "connect.facebook.net",
+                "doubleclick.net",
+                "criteo.com",
+                "taboola.com",
+                "hotjar.com",
+            ],
+            "detected_tracker_cookies": ["_fbp", "_fbc", "fr", "_gcl_au", "_hjid"],
+        },
+        "privacy_policy_audit": {"found": True, "http_status": 200, "has_mandatory_keywords": True, "found_keywords": ["titular"]},
+        "arco_channels_audit": {"found": True, "detected_emails": ["a@b.cl"], "detected_terms": ["arco"], "has_explicit_arco_mention": True},
+        "consent_banner_audit": {"banner_detected": True, "has_reject_option": True}
+    }
+    r3 = RulesEngine.evaluate(critical_leaking_data)
+    assert r3["consent_banner_audit"]["blocks_prior_to_consent"] is False
+    assert r3["pilares"]["consentimiento_cookies"]["score"] == 0
+    assert r3["verdict"] == "RECHAZADO"
 
 
 # =========================================================================
