@@ -2,13 +2,15 @@
 Motor de Reglas de Cumplimiento Legal (Ley N° 19.628 y Nueva Ley de Protección de Datos Personales Chile N° 21.719).
 Incremento 2 + Mejoras de Primera Defensa (FB-02 / FB-04):
 - Ponderación de 100 pts: Política de Privacidad (35 pts), Canales ARCO (30 pts), Consentimiento & Cookies (35 pts).
-- Dictamen determinista: APROBADO (score >= 80 y 0 trackers), CON_OBSERVACIONES (score >= 55 o banner sin opción de rechazo),
-  RECHAZADO (< 55 o trackers no autorizados con score bajo), NO_ACCESIBLE (bloqueo WAF/HTTP 403/503/timeout).
+- Dictamen determinista: APROBADO (score >= 80 y 0 trackers, o >= 85 con impacto mínimo en consentimiento),
+  CON_OBSERVACIONES (score >= 55, banner sin rechazo o rastreadores leves/moderados),
+  RECHAZADO (< 55, política ausente o carga severa de rastreadores), NO_ACCESIBLE (bloqueo WAF/HTTP 403/503/timeout).
 - Generación sistemática de tickets técnicos de remediación (remediation_ticket) con código accionable (FB-04).
 """
 
 from typing import Dict, Any, List
 from src.scanner.remediation_catalog import get_remediation_ticket
+from src.scanner.trackers_db import calculate_trackers_penalty
 
 LEGAL_DISCLAIMER = (
     "DataCheck.cl es una herramienta de auditoría técnica académica de apoyo. "
@@ -296,7 +298,9 @@ class RulesEngine:
         else:
             blocks_prior_to_consent = None
 
-        # Ajuste de puntaje del pilar de consentimiento según presencia de rastreadores y banner
+        # Ajuste gradual del puntaje del pilar de consentimiento según invasividad de rastreadores, cookies y banner
+        banner_lacks_reject = bool(banner_detected and buttons_verifiable and not has_reject_option)
+
         if not has_unauthorized:
             if banner_detected:
                 if not buttons_verifiable:
@@ -324,38 +328,70 @@ class RulesEngine:
                 "remediation_ticket": get_remediation_ticket("TRACKER_UNAUTHORIZED", "Navegación conforme: Mantener bloqueo preventivo por defecto (opt-in).")
             })
         else:
-            pilar_consent_score = 0
-            consent_status = "FALLA"
+            penalty_info = calculate_trackers_penalty(detected_domains, detected_cookies)
+            tracker_penalty = penalty_info["total_penalty"]
+
+            if banner_lacks_reject:
+                banner_penalty = 15
+            elif not banner_detected:
+                banner_penalty = 5
+            else:
+                banner_penalty = 0
+
+            pilar_consent_score = max(0, 35 - tracker_penalty - banner_penalty)
+            consent_status = "OBSERVACION" if pilar_consent_score >= 15 else "FALLA"
+            finding_status = "WARNING" if consent_status == "OBSERVACION" else "FAIL"
+
             # Consolidación: Máximo 2 cuadros (uno para dominios de rastreo, uno para cookies)
             if detected_domains:
+                dom_penalties = penalty_info["domain_penalties"]
+                dom_sum = penalty_info["domain_penalty_sum"]
                 dom_count = len(detected_domains)
-                dom_list_str = ", ".join(detected_domains)
+                dom_list_raw = ", ".join(detected_domains)
+                dom_summary = ", ".join(f"{p['item']} ({p['level']} -{p['penalty']})" for p in dom_penalties)
+                dom_items = [
+                    f"{p['item']} [Invasividad {p['level']} · {p['category']} · -{p['penalty']} pts]"
+                    for p in dom_penalties
+                ]
                 findings.append({
                     "pilar": "CONSENTIMIENTO_COOKIES",
-                    "status": "FAIL",
+                    "status": finding_status,
                     "title": "Inyección no autorizada de rastreadores externos",
-                    "detail": f"Se interceptaron peticiones salientes no autorizadas hacia {dom_count} dominio(s) de rastreo previo al consentimiento explícito: {dom_list_str}."[:300],
-                    "technical_raw": dom_list_str[:500],
-                    "items": list(detected_domains),
+                    "detail": (
+                        f"Se interceptaron {dom_count} dominio(s) de rastreo previo al consentimiento "
+                        f"(-{dom_sum} pts según nivel de invasividad): {dom_summary}."
+                    )[:300],
+                    "technical_raw": f"Descuento dominios: -{dom_sum} pts | {dom_summary}"[:500],
+                    "items": dom_items,
                     "remediation_ticket": get_remediation_ticket(
                         "TRACKER_UNAUTHORIZED",
-                        f"Dominios de rastreo no autorizados: {dom_list_str}"
+                        f"Dominios de rastreo no autorizados (-{dom_sum} pts): {dom_list_raw}"
                     )
                 })
 
             if detected_cookies:
+                ck_penalties = penalty_info["cookie_penalties"]
+                ck_sum = penalty_info["cookie_penalty_sum"]
                 ck_count = len(detected_cookies)
-                ck_list_str = ", ".join(detected_cookies)
+                ck_list_raw = ", ".join(detected_cookies)
+                ck_summary = ", ".join(f"{p['item']} ({p['level']} -{p['penalty']})" for p in ck_penalties)
+                ck_items = [
+                    f"{p['item']} [Invasividad {p['level']} · {p['category']} · -{p['penalty']} pts]"
+                    for p in ck_penalties
+                ]
                 findings.append({
                     "pilar": "CONSENTIMIENTO_COOKIES",
-                    "status": "FAIL",
+                    "status": finding_status,
                     "title": "Depósito no autorizado de cookies de rastreo",
-                    "detail": f"Se identificaron {ck_count} cookie(s) no esenciales depositadas en el navegador previo a la interacción del usuario: {ck_list_str}."[:300],
-                    "technical_raw": ck_list_str[:500],
-                    "items": list(detected_cookies),
+                    "detail": (
+                        f"Se identificaron {ck_count} cookie(s) no esenciales previo al consentimiento "
+                        f"(-{ck_sum} pts según nivel de invasividad): {ck_summary}."
+                    )[:300],
+                    "technical_raw": f"Descuento cookies: -{ck_sum} pts | {ck_summary}"[:500],
+                    "items": ck_items,
                     "remediation_ticket": get_remediation_ticket(
                         "COOKIE_UNAUTHORIZED",
-                        f"Cookies no esenciales no autorizadas: {ck_list_str}"
+                        f"Cookies no esenciales no autorizadas (-{ck_sum} pts): {ck_list_raw}"
                     )
                 })
 
@@ -429,13 +465,13 @@ class RulesEngine:
         elif not banner_detected and has_unauthorized:
             findings.append({
                 "pilar": "CONSENTIMIENTO_COOKIES",
-                "status": "FAIL",
+                "status": "WARNING" if consent_status == "OBSERVACION" else "FAIL",
                 "title": "Ausencia de Mecanismo de Consentimiento con Rastreadores Activos",
                 "detail": (
                     "El sitio web ejecuta rastreadores de terceros o deposita cookies de rastreo sin desplegar "
-                    "un banner o mecanismo previo para recabar el consentimiento del usuario."
+                    "un banner o mecanismo previo para recabar el consentimiento del usuario (-5 pts adicionales)."
                 ),
-                "technical_raw": "0 mecanismos de consentimiento detectados",
+                "technical_raw": "0 mecanismos de consentimiento detectados (-5 pts)",
                 "remediation_ticket": get_remediation_ticket("BANNER_NO_REJECT", "Ausencia total de banner con trackers activos.")
             })
 
@@ -456,7 +492,7 @@ class RulesEngine:
             else:
                 findings.append({
                     "pilar": "CONSENTIMIENTO_COOKIES",
-                    "status": "FAIL",
+                    "status": "WARNING" if consent_status == "OBSERVACION" else "FAIL",
                     "title": "Falla en Bloqueo Preventivo Pre-Consentimiento",
                     "detail": (
                         f"A pesar de contar con un banner de consentimiento ('{cmp_provider or 'Genérico'}'), "
@@ -474,32 +510,35 @@ class RulesEngine:
         # =========================================================================
         # DICTAMEN FINAL DETERMINISTA (C-01 / C-04 / TEST-RULE-04)
         # =========================================================================
-        # Regla estricta Roadmap Fase 3:
-        # - RECHAZADO: Inyección de trackers/cookies sin consentimiento previo o ausencia de política.
-        # - APROBADO: Política funcional con contenido normativo mínimo, mención de derechos y 0 trackers.
-        # - CON_OBSERVACIONES: Política genérica/incompleta, canales parciales o advertencias normativas,
-        #   o banner de cookies puramente informativo sin opción real de rechazo o configuración.
-        banner_lacks_reject = banner_detected and buttons_verifiable and not has_reject_option
-
+        # Evaluación flexible por invasividad:
+        # - RECHAZADO: Política ausente/inaccesible, carga crítica/masiva de rastreadores (pilar consentimiento < 15/35) o score < 55.
+        # - APROBADO: Score >= 80 sin rastreadores, o score >= 85 con impacto mínimo (pilar consentimiento >= 30/35) y banner válido.
+        # - CON_OBSERVACIONES: Score >= 55 (o banner informativo con carga leve), incluyendo rastreadores de baja/media invasividad.
         policy_missing = (not privacy_audit.get("found")) or (privacy_audit.get("http_status") in (0, 404, 500))
 
-        if has_unauthorized:
-            verdict = "RECHAZADO"
-            verdict_summary = (
-                "Incumplimiento crítico: Se detectaron rastreadores de terceros o cookies "
-                "no esenciales activos previo al consentimiento del usuario."
-            )
-        elif policy_missing:
+        if policy_missing:
             verdict = "RECHAZADO"
             verdict_summary = (
                 "Incumplimiento crítico: Ausencia o inaccesibilidad de la política de privacidad "
                 "(enlace no localizado o ruta retornando código de error HTTP)."
             )
-        elif score >= 80 and privacy_audit.get("has_mandatory_keywords", False) and not banner_lacks_reject:
+        elif has_unauthorized and pilar_consent_score < 15:
+            verdict = "RECHAZADO"
+            verdict_summary = (
+                "Incumplimiento crítico: Se detectaron múltiples rastreadores o cookies de alta/crítica invasividad "
+                "activos previo al consentimiento del usuario."
+            )
+        elif score >= 80 and not has_unauthorized and privacy_audit.get("has_mandatory_keywords", False) and not banner_lacks_reject:
             verdict = "APROBADO"
             verdict_summary = (
                 "Conforme: El sitio web cumple con los estándares auditados de transparencia, "
-                "disponibilidad de políticas y canales para el ejercicio de derechos ARCO."
+                "disponibilidad de políticas y canales para el ejercicio de derechos ARCOP + Bloqueo."
+            )
+        elif score >= 85 and has_unauthorized and pilar_consent_score >= 30 and privacy_audit.get("has_mandatory_keywords", False) and not banner_lacks_reject:
+            verdict = "APROBADO"
+            verdict_summary = (
+                "Conforme con observación menor: El sitio web presenta sólida transparencia normativa "
+                "y un impacto reducido de rastreadores de baja/media invasividad pre-consentimiento."
             )
         elif score >= 55 or banner_lacks_reject:
             verdict = "CON_OBSERVACIONES"
@@ -513,10 +552,15 @@ class RulesEngine:
                         "Cumplimiento parcial: Banner de cookies puramente informativo sin opción real "
                         "de rechazo o configuración."
                     )
+            elif has_unauthorized:
+                verdict_summary = (
+                    "Cumplimiento parcial: Se detectaron rastreadores o cookies de invasividad leve o moderada "
+                    "previo al consentimiento, aplicando descuento gradual de puntaje."
+                )
             else:
                 verdict_summary = (
                     "Cumplimiento parcial: El sitio presenta advertencias técnicas en la formulación "
-                    "de la política de privacidad o en la exhaustividad de los canales ARCO."
+                    "de la política de privacidad o en la exhaustividad de los canales ARCOP + Bloqueo."
                 )
         else:
             verdict = "RECHAZADO"
