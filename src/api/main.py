@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from src.api.routes import scan, health, reports, flow, schedules
+from src.api.routes import scan, health, reports, flow, schedules, history
 from src.db.session import init_db
 from src.core.scheduler import start_scheduler, shutdown_scheduler
 
@@ -51,6 +51,7 @@ app.include_router(health.router)
 app.include_router(reports.router)
 app.include_router(flow.router)
 app.include_router(schedules.router)
+app.include_router(history.router)
 
 
 # Montar interfaz web estática en la raíz "/"

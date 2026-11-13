@@ -365,6 +365,195 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    function renderComparisonAndHistory(data) {
+        const compSec = $("comparison-section");
+        const badge = $("comparison-badge");
+        const content = $("comparison-card-content");
+        if (!compSec || !content) return;
+
+        compSec.hidden = false;
+        const comp = data.comparison;
+
+        if (comp && comp.has_previous && comp.score_comparison && comp.verdict_transition) {
+            const sc = comp.score_comparison;
+            const vt = comp.verdict_transition;
+            const delta = sc.delta || 0;
+            const sign = delta > 0 ? `+${delta}` : `${delta}`;
+
+            let bTone = "info";
+            let bText = `Sin cambios (${sign} pts)`;
+            if (vt.status === "IMPROVED") {
+                bTone = "ok";
+                bText = `Evolución Positiva (${sign} pts)`;
+            } else if (vt.status === "REGRESSED") {
+                bTone = "fail";
+                bText = `Regresión Detectada (${sign} pts)`;
+            }
+
+            if (badge) {
+                badge.className = `badge tone-${bTone}`;
+                badge.textContent = bText;
+            }
+
+            const prevVerdict = vt.from || vt.from_verdict || "N/A";
+            const currVerdict = vt.to || "N/A";
+            const elapsedVal = comp.time_elapsed_hours !== undefined ? comp.time_elapsed_hours : comp.elapsed_hours;
+            const elapsedStr = elapsedVal !== null && elapsedVal !== undefined
+                ? `${elapsedVal} h desde la revisión anterior`
+                : "Revisión consecutiva";
+
+            const prevScore = sc.previous_score !== undefined ? sc.previous_score : sc.previous;
+            const currScore = sc.current_score !== undefined ? sc.current_score : sc.current;
+
+            // Pilares delta
+            let pilaresHtml = "";
+            if (Array.isArray(comp.pilares_delta) && comp.pilares_delta.length) {
+                pilaresHtml = `
+                    <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);">
+                        <span class="muted small"><b>Variación por Pilar:</b></span>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 8px;">
+                            ${comp.pilares_delta.map((p) => {
+                                const d = p.delta || 0;
+                                const dSign = d > 0 ? `+${d}` : `${d}`;
+                                const dTone = d > 0 ? "ok" : (d < 0 ? "fail" : "info");
+                                return `
+                                    <div style="background: var(--surface); padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); display: flex; justify-content: space-between; align-items: center;">
+                                        <div>
+                                            <div style="font-size: 13px; font-weight: 600;">${esc(pilarName(p.pilar))}</div>
+                                            <div class="muted" style="font-size: 12px;">${esc(p.previous_score)} → <b>${esc(p.current_score)}</b> pts</div>
+                                        </div>
+                                        <span class="badge tone-${dTone}" style="font-size: 12px;">${esc(dSign)}</span>
+                                    </div>
+                                `;
+                            }).join("")}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Trackers diff
+            const td = comp.trackers_diff || {};
+            const remList = td.remediated || [];
+            const regList = td.regressions || [];
+            const perList = td.persistent || [];
+
+            const renderTrackerGroup = (title, items, badgeClass, emptyMsg) => {
+                if (!items.length) {
+                    return `<div style="font-size: 13px;"><span class="muted">${esc(title)}:</span> <span class="muted">${esc(emptyMsg)}</span></div>`;
+                }
+                const pills = items.map(t => `<span class="badge ${badgeClass}" style="text-transform: none; font-size: 12px; margin: 2px 4px 2px 0;">${esc(t.valor || t.domain_or_name)} (${esc(t.categoria || t.category)})</span>`).join("");
+                return `<div style="font-size: 13px; margin-bottom: 6px;"><b>${esc(title)} (${items.length}):</b> <div style="margin-top: 4px; display: flex; flex-wrap: wrap;">${pills}</div></div>`;
+            };
+
+            const trackersDiffHtml = `
+                <div style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);">
+                    <span class="muted small"><b>Diferencial de Rastreadores y Cookies Pre-Consentimiento:</b></span>
+                    <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+                        ${renderTrackerGroup("Remediados (Eliminados)", remList, "tone-ok", "0 eliminados")}
+                        ${renderTrackerGroup("Nuevas Regresiones", regList, "tone-fail", "0 regresiones nuevas")}
+                        ${renderTrackerGroup("Persistentes (No corregidos)", perList, "tone-warn", "0 persistentes")}
+                    </div>
+                </div>
+            `;
+
+            content.innerHTML = `
+                <div class="consent-card-grid" style="margin-bottom: 12px;">
+                    <div class="consent-item" style="background: var(--surface); padding: 12px 16px; border-radius: 10px; border: 1px solid var(--line);">
+                        <span class="muted small">Auditoría Anterior (Antes):</span>
+                        <p style="font-size: 16px; margin-top: 4px;"><b>${esc(prettify(prevVerdict))}</b> — <b>${esc(prevScore)}</b>/100 pts</p>
+                    </div>
+                    <div class="consent-item" style="background: var(--surface); padding: 12px 16px; border-radius: 10px; border: 1px solid var(--line);">
+                        <span class="muted small">Auditoría Actual (Después):</span>
+                        <p style="font-size: 16px; margin-top: 4px;"><b>${esc(prettify(currVerdict))}</b> — <b>${esc(currScore)}</b>/100 pts</p>
+                    </div>
+                    <div class="consent-item" style="background: var(--surface); padding: 12px 16px; border-radius: 10px; border: 1px solid var(--line);">
+                        <span class="muted small">Delta Evolutivo:</span>
+                        <p style="font-size: 16px; margin-top: 4px;"><b>${esc(sign)} pts</b> <span class="muted small">(${esc(elapsedStr)})</span></p>
+                    </div>
+                </div>
+                ${pilaresHtml}
+                ${trackersDiffHtml}
+                <div style="margin-top: 14px; display: flex; justify-content: flex-end;">
+                    <button type="button" id="btn-reaudit-now" class="btn-secondary" style="height: 36px; padding: 0 14px; font-size: 13px;">
+                        ${icon("i-search", 14)} Volver a auditar ahora
+                    </button>
+                </div>
+                <div id="domain-history-container" style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line);"></div>
+            `;
+        } else {
+            if (badge) {
+                badge.className = "badge tone-info";
+                badge.textContent = "1ª Auditoría (Línea Base)";
+            }
+            content.innerHTML = `
+                <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
+                    <div>
+                        <p style="font-size: 14px; font-weight: 600;">Esta es la primera auditoría válida registrada para este dominio (Línea Base).</p>
+                        <p class="muted small" style="margin-top: 4px;">Ejecuta una segunda revisión ahora o programa una re-auditoría para visualizar la comparativa "Antes vs. Después" de puntaje, pilares y rastreadores.</p>
+                    </div>
+                    <button type="button" id="btn-reaudit-now" class="btn-primary" style="height: 40px; padding: 0 18px; font-size: 14px;">
+                        ${icon("i-search", 15)} Re-auditar ahora para comparar
+                    </button>
+                </div>
+                <div id="domain-history-container" style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line);"></div>
+            `;
+        }
+
+        const btnReaudit = $("btn-reaudit-now");
+        if (btnReaudit && data.target_url) {
+            btnReaudit.onclick = () => scan(data.target_url, true);
+        }
+
+        // Cargar historial evolutivo del dominio desde GET /api/v1/sites/{domain}/history
+        try {
+            const u = new URL(data.target_url);
+            const domain = u.hostname.replace(/^www\./i, "").toLowerCase();
+            if (domain) {
+                fetch(`/api/v1/sites/${encodeURIComponent(domain)}/history?limit=5`)
+                    .then(r => r.ok ? r.json() : null)
+                    .then(histData => {
+                        const histBox = $("domain-history-container");
+                        const timeline = histData && (histData.timeline || histData.history);
+                        if (!histBox || !timeline || !timeline.length) return;
+                        const rows = timeline.map((h, i) => {
+                            const dt = h.executed_at ? new Date(h.executed_at).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" }) : "Reciente";
+                            const hTone = toneOf(h.verdict);
+                            const dVal = h.score_delta_from_previous !== undefined ? h.score_delta_from_previous : h.score_delta;
+                            const dStr = dVal === null || dVal === undefined ? "Línea base" : (dVal > 0 ? `+${dVal} pts` : `${dVal} pts`);
+                            const tCount = h.trackers_count !== undefined ? h.trackers_count : (h.tracker_count || 0);
+                            return `
+                                <tr style="border-bottom: 1px solid var(--line); font-size: 13px;">
+                                    <td style="padding: 8px 6px;">${i === 0 ? "<b>Actual</b> — " : ""}${esc(dt)}</td>
+                                    <td style="padding: 8px 6px;"><span class="badge tone-${hTone}" style="font-size: 11px;">${esc(prettify(h.verdict))}</span></td>
+                                    <td style="padding: 8px 6px;"><b>${esc(h.score)}</b>/100</td>
+                                    <td style="padding: 8px 6px;">${esc(dStr)}</td>
+                                    <td style="padding: 8px 6px;">${esc(tCount)} detectados</td>
+                                </tr>
+                            `;
+                        }).join("");
+                        histBox.innerHTML = `
+                            <span class="muted small"><b>Historial Evolutivo del Dominio (${esc(histData.domain)} — ${esc(histData.total_audits)} revisiones):</b></span>
+                            <div style="overflow-x: auto; margin-top: 8px;">
+                                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                                    <thead>
+                                        <tr style="border-bottom: 2px solid var(--line); font-size: 12px; color: var(--muted);">
+                                            <th style="padding: 6px;">Fecha</th>
+                                            <th style="padding: 6px;">Veredicto</th>
+                                            <th style="padding: 6px;">Puntaje</th>
+                                            <th style="padding: 6px;">Δ Puntaje</th>
+                                            <th style="padding: 6px;">Rastreadores</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>${rows}</tbody>
+                                </table>
+                            </div>
+                        `;
+                    })
+                    .catch(() => {});
+            }
+        } catch (_) {}
+    }
+
     function renderConsentBanner(data) {
         const consentSec = $("consent-section");
         if (!consentSec) return;
@@ -600,6 +789,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>`;
         }).join("");
 
+        renderComparisonAndHistory(data);
         renderConsentBanner(data);
         renderResponsibleParty(data);
 
@@ -676,6 +866,7 @@ document.addEventListener("DOMContentLoaded", () => {
     function renderFlowResults(data, elapsedMs) {
         const flowSec = $("flow-section");
         if (flowSec) flowSec.hidden = false;
+        if ($("comparison-section")) $("comparison-section").hidden = true;
         if ($("consent-section")) $("consent-section").hidden = true;
         if ($("responsible-section")) $("responsible-section").hidden = true;
         if (scheduleCard) scheduleCard.hidden = true;

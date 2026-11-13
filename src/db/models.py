@@ -19,7 +19,9 @@ from sqlalchemy import (
     DateTime,
     Boolean,
     ForeignKey,
-    UniqueConstraint, CheckConstraint
+    Index,
+    UniqueConstraint, CheckConstraint,
+    text
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
@@ -53,6 +55,14 @@ class Auditoria(Base):
         CheckConstraint(
             "verdict IN ('APROBADO', 'CON_OBSERVACIONES', 'RECHAZADO', 'NO_ACCESIBLE', 'CUMPLE', 'NO_CUMPLE', 'NO_VERIFICABLE', 'NO_APLICABLE')",
             name="ck_auditoria_verdict"
+        ),
+        Index("ix_auditorias_sitio_fecha", "sitio_id", "ejecutada_en"),
+        Index(
+            "idx_auditorias_sitio_validas_fecha",
+            "sitio_id",
+            "ejecutada_en",
+            postgresql_where=text("page_load_status = 1"),
+            sqlite_where=text("page_load_status = 1"),
         ),
     )
 

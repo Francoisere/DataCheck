@@ -4,7 +4,7 @@ Alineados estrictamente con el contrato OpenAPI C-01 / C-04 del Incremento 2.
 """
 
 from typing import List, Dict, Any, Optional, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ScanRequest(BaseModel):
@@ -122,6 +122,71 @@ class ResponsiblePartyAudit(BaseModel):
     dpo_email: Optional[str] = Field(None, description="Correo electrónico específico del Delegado de Protección de Datos (DPO)")
 
 
+# --- Esquemas para Comparador de Regresiones e Historial Evolutivo (RF-HIST-01 a RF-HIST-03) ---
+
+class VerdictTransition(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    from_verdict: str = Field(..., alias="from", serialization_alias="from", description="Veredicto anterior")
+    to: str = Field(..., description="Veredicto actual")
+    status: str = Field(..., description="IMPROVED | REGRESSED | UNCHANGED")
+
+
+class ScoreComparison(BaseModel):
+    previous_score: int = Field(..., description="Puntaje de la auditoría anterior")
+    current_score: int = Field(..., description="Puntaje de la auditoría actual")
+    delta: int = Field(..., description="Variación de puntaje (current - previous)")
+
+
+class PillarDelta(BaseModel):
+    pilar: str = Field(..., description="Identificador del pilar normativo")
+    previous_status: str = Field(..., description="Estado en la auditoría anterior")
+    current_status: str = Field(..., description="Estado en la auditoría actual")
+    previous_score: int = Field(..., description="Puntaje anterior del pilar")
+    current_score: int = Field(..., description="Puntaje actual del pilar")
+    delta: int = Field(..., description="Variación de puntaje del pilar")
+
+
+class TrackerDiffItem(BaseModel):
+    tipo: str = Field(..., description="DOMINIO | COOKIE")
+    valor: str = Field(..., description="Nombre del dominio o cookie de rastreo")
+    categoria: str = Field(default="TRACKER", description="Categoría funcional del rastreador")
+
+
+class TrackersDiff(BaseModel):
+    remediated: List[TrackerDiffItem] = Field(default_factory=list, description="Rastreadores eliminados desde la auditoría anterior")
+    persistent: List[TrackerDiffItem] = Field(default_factory=list, description="Rastreadores que siguen presentes")
+    regressions: List[TrackerDiffItem] = Field(default_factory=list, description="Nuevos rastreadores inyectados")
+
+
+class AuditDiffResponse(BaseModel):
+    current_audit_id: str = Field(..., description="UUID de la auditoría evaluada")
+    previous_audit_id: Optional[str] = Field(None, description="UUID de la auditoría válida anterior")
+    has_previous: bool = Field(False, description="True si existe una auditoría válida previa para comparar")
+    time_elapsed_hours: Optional[float] = Field(None, description="Horas transcurridas entre ambas auditorías")
+    verdict_transition: Optional[VerdictTransition] = Field(None, description="Transición del veredicto normativo")
+    score_comparison: Optional[ScoreComparison] = Field(None, description="Comparativa numérica de puntaje global")
+    pilares_delta: List[PillarDelta] = Field(default_factory=list, description="Evolución desglosada por pilar")
+    trackers_diff: TrackersDiff = Field(default_factory=TrackersDiff, description="Diferencial de rastreadores y cookies")
+
+
+class SiteHistoryItem(BaseModel):
+    audit_id: str = Field(..., description="UUID de la auditoría")
+    executed_at: str = Field(..., description="Fecha y hora ISO 8601 de ejecución")
+    verdict: str = Field(..., description="Veredicto obtenido")
+    score: int = Field(..., description="Puntaje global obtenido")
+    score_delta_from_previous: Optional[int] = Field(None, description="Variación de puntaje respecto a la auditoría válida previa")
+    trackers_count: int = Field(0, description="Cantidad de rastreadores/cookies detectados")
+
+
+class SiteHistoryResponse(BaseModel):
+    domain: str = Field(..., description="Dominio normalizado consultado")
+    total_audits: int = Field(..., description="Total histórico de auditorías registradas para el dominio")
+    latest_verdict: str = Field(..., description="Veredicto más reciente del dominio")
+    overall_score_delta: int = Field(0, description="Variación neta de puntaje entre la primera y la última auditoría válida")
+    timeline: List[SiteHistoryItem] = Field(default_factory=list, description="Línea de tiempo de auditorías ordenadas descendentemente")
+
+
 class ScanResponse(BaseModel):
     audit_id: Optional[str] = Field(None, description="Identificador único UUID de la auditoría en PostgreSQL")
     target_url: str = Field(..., description="URL normalizada y auditada")
@@ -137,6 +202,7 @@ class ScanResponse(BaseModel):
     responsible_party_audit: Optional[ResponsiblePartyAudit] = Field(None, description="Resultado de la auditoría de deberes del responsable (Art. 14 ter b y c Ley 21.719)")
     legal_disclaimer: str = Field(..., description="Aviso legal de descargo de responsabilidad académica")
     pdf_report_url: Optional[str] = Field(None, description="Enlace para descargar el informe oficial en PDF")
+    comparison: Optional[AuditDiffResponse] = Field(None, description="Comparativa evolutiva respecto a la auditoría válida inmediatamente anterior")
 
 
 class ScheduleCreateRequest(BaseModel):

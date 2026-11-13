@@ -94,16 +94,28 @@ class PdfReportService:
             fontName="Helvetica",
             fontSize=9,
             leading=12,
-            textColor=colors.HexColor("#334155")
+            textColor=colors.HexColor("#334155"),
+            splitLongWords=0,
+        )
+
+        cell_style = ParagraphStyle(
+            "TableCellDark",
+            parent=body_style,
+            fontName="Helvetica",
+            fontSize=8.5,
+            leading=11.5,
+            textColor=colors.HexColor("#334155"),
+            splitLongWords=0,
         )
 
         badge_style = ParagraphStyle(
             "BadgeStyle",
             parent=styles["Normal"],
             fontName="Helvetica-Bold",
-            fontSize=11,
-            leading=14,
-            alignment=1
+            fontSize=10.5,
+            leading=13.5,
+            alignment=1,
+            splitLongWords=0,
         )
 
         story = []
@@ -138,16 +150,17 @@ class PdfReportService:
         }
         border_col, bg_col, text_col = verdict_colors.get(verdict, ("#64748B", "#F8FAFC", "#0F172A"))
 
-        verdict_text = f"<font color='{text_col}'>DICTAMEN: <b>{verdict}</b> ({score}/100 pts)</font>"
-        summary_text = audit_data.get("verdict_summary", "")
+        verdict_display = escape(str(verdict).replace("_", " "))
+        verdict_text = f"<font color='{text_col}'>DICTAMEN: <b>{verdict_display}</b><br/>({score}/100 pts)</font>"
+        summary_text = escape(str(audit_data.get("verdict_summary", "")))
 
         resumen_box_data = [
             [
                 Paragraph(verdict_text, badge_style),
-                Paragraph(f"<b>Sitio Auditado:</b> {target_url}<br/>{summary_text}", body_style)
+                Paragraph(f"<b>Sitio Auditado:</b> {escape(str(target_url))}<br/>{summary_text}", body_style)
             ]
         ]
-        t_resumen = Table(resumen_box_data, colWidths=[160, 380])
+        t_resumen = Table(resumen_box_data, colWidths=[170, 370])
         t_resumen.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor(bg_col)),
             ("BOX", (0, 0), (-1, -1), 1, colors.HexColor(border_col)),
@@ -160,6 +173,56 @@ class PdfReportService:
         story.append(t_resumen)
         story.append(Spacer(1, 10))
 
+        # 2.5. BLOQUE COMPARATIVO EVOLUTIVO ("ANTES VS. DESPUÉS") SI EXISTE HISTORIAL PREVIO (RF-HIST-04)
+        comp = audit_data.get("comparison") or {}
+        if isinstance(comp, dict) and comp.get("has_previous"):
+            vt = comp.get("verdict_transition") or {}
+            sc = comp.get("score_comparison") or {}
+            td = comp.get("trackers_diff") or {}
+            prev_v = escape(str(vt.get("from", "-")).replace("_", " "))
+            curr_v = escape(str(vt.get("to", verdict)).replace("_", " "))
+            raw_status = str(vt.get("status", "UNCHANGED"))
+            status_labels = {
+                "IMPROVED": "Mejoró",
+                "REGRESSED": "Regresión",
+                "UNCHANGED": "Sin cambios",
+            }
+            t_status = escape(status_labels.get(raw_status, raw_status))
+            prev_sc = sc.get("previous_score", 0)
+            curr_sc = sc.get("current_score", score)
+            delta_sc = sc.get("delta", 0)
+            delta_str = f"+{delta_sc} pts" if delta_sc > 0 else f"{delta_sc} pts"
+            remediated_cnt = len(td.get("remediated") or [])
+            persistent_cnt = len(td.get("persistent") or [])
+            regressions_cnt = len(td.get("regressions") or [])
+
+            story.append(Paragraph("Comparativa Evolutiva (Antes vs. Después)", h2_style))
+            comp_table_data = [
+                ["Veredicto Anterior", "Veredicto Actual", "Variación Puntaje", "Balance de Rastreadores"],
+                [
+                    Paragraph(f"<b>{prev_v}</b> ({prev_sc} pts)", cell_style),
+                    Paragraph(f"<b>{curr_v}</b> ({curr_sc} pts)", cell_style),
+                    Paragraph(f"<b>{delta_str}</b> ({t_status})", cell_style),
+                    Paragraph(f"Remediados: <b>{remediated_cnt}</b> &nbsp;|&nbsp; Persistentes: <b>{persistent_cnt}</b> &nbsp;|&nbsp; Regresiones: <b>{regressions_cnt}</b>", cell_style),
+                ],
+            ]
+            t_comp = Table(comp_table_data, colWidths=[115, 115, 100, 210])
+            t_comp.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("BACKGROUND", (0, 1), (-1, 1), colors.HexColor("#F8FAFC")),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+            ]))
+            story.append(t_comp)
+            story.append(Spacer(1, 10))
+
         # 3. TABLA DE EVALUACIÓN POR PILARES (Ley 21.719)
         story.append(Paragraph("1. Evaluación por Pilares Normativos Auditables", h2_style))
         
@@ -168,29 +231,33 @@ class PdfReportService:
         p_arco = pilares.get("canales_arco", {})
         p_cook = pilares.get("consentimiento_cookies", {})
 
+        def _fmt_status(raw_st: str) -> str:
+            st = str(raw_st or "FALLA").replace("_", " ")
+            return "OBSERVACIÓN" if st == "OBSERVACION" else st
+
         pilares_table_data = [
             ["Pilar Normativo", "Estado", "Puntaje", "Fundamento Ley 21.719"],
             [
-                "Política de Privacidad y Transparencia",
-                p_priv.get("status", "FALLA"),
-                f"{p_priv.get('score', 0)} / {p_priv.get('max_score', 35)} pts",
-                "Art. 11 (Deber de Transparencia e Información)"
+                Paragraph("Política de Privacidad y Transparencia", cell_style),
+                Paragraph(f"<b>{escape(_fmt_status(p_priv.get('status', 'FALLA')))}</b>", cell_style),
+                Paragraph(f"{p_priv.get('score', 0)} / {p_priv.get('max_score', 35)} pts", cell_style),
+                Paragraph("Art. 11 (Deber de Transparencia e Información)", cell_style),
             ],
             [
-                "Canales de Ejercicio de Derechos ARCOP + Bloqueo",
-                p_arco.get("status", "FALLA"),
-                f"{p_arco.get('score', 0)} / {p_arco.get('max_score', 30)} pts",
-                "Arts. 19 a 24 (Acceso, Rectificación, Cancelación, Oposición)"
+                Paragraph("Canales de Ejercicio de Derechos ARCOP + Bloqueo", cell_style),
+                Paragraph(f"<b>{escape(_fmt_status(p_arco.get('status', 'FALLA')))}</b>", cell_style),
+                Paragraph(f"{p_arco.get('score', 0)} / {p_arco.get('max_score', 30)} pts", cell_style),
+                Paragraph("Arts. 19 a 24 (Acceso, Rectificación, Cancelación, Oposición)", cell_style),
             ],
             [
-                "Consentimiento Previo y Cookies de Rastreo",
-                p_cook.get("status", "FALLA"),
-                f"{p_cook.get('score', 0)} / {p_cook.get('max_score', 35)} pts",
-                "Arts. 12 y 14 (Principio de Licitud y Opt-in estricto)"
+                Paragraph("Consentimiento Previo y Cookies de Rastreo", cell_style),
+                Paragraph(f"<b>{escape(_fmt_status(p_cook.get('status', 'FALLA')))}</b>", cell_style),
+                Paragraph(f"{p_cook.get('score', 0)} / {p_cook.get('max_score', 35)} pts", cell_style),
+                Paragraph("Arts. 12 y 14 (Principio de Licitud y Opt-in estricto)", cell_style),
             ],
         ]
 
-        t_pilares = Table(pilares_table_data, colWidths=[180, 70, 70, 220])
+        t_pilares = Table(pilares_table_data, colWidths=[160, 90, 65, 225])
         t_pilares.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -199,8 +266,10 @@ class PdfReportService:
             ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
-            ("TOPPADDING", (0, 0), (-1, -1), 5),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("LEFTPADDING", (0, 0), (-1, -1), 6),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 6),
         ]))
         story.append(t_pilares)
         story.append(Spacer(1, 10))
@@ -235,13 +304,13 @@ class PdfReportService:
         consent_table_data = [
             ["Parámetro de Consentimiento", "Resultado de Inspección", "Marco y Entorno", "Auditoría de Frames"],
             [
-                Paragraph(f"<b>Banner Detectado:</b> {'Sí' if banner_detected else 'No'}<br/><b>Proveedor CMP:</b> {escape(cmp_provider)}", body_style),
-                Paragraph(f"<b>Opción Rechazo:</b> {has_reject}<br/><b>Opción Aceptar:</b> {has_accept}<br/><b>Configuración:</b> {has_settings}", body_style),
-                Paragraph(f"<b>Origen:</b> <font size='7'>{escape(source_frame[:45])}</font><br/><b>Verificable:</b> {verifiable}<br/><b>Bloqueo Previo:</b> {blocks_str}", body_style),
-                Paragraph(f"<b>Total Frames:</b> {total_frames}<br/><b>Terceros:</b> {third_party}<br/><b>Frames CMP:</b> {cmp_frames}", body_style)
+                Paragraph(f"<b>Banner Detectado:</b> {'Sí' if banner_detected else 'No'}<br/><b>Proveedor CMP:</b> {escape(cmp_provider)}", cell_style),
+                Paragraph(f"<b>Opción Rechazo:</b> {has_reject}<br/><b>Opción Aceptar:</b> {has_accept}<br/><b>Configuración:</b> {has_settings}", cell_style),
+                Paragraph(f"<b>Origen:</b> <font size='7.5'>{escape(source_frame[:45])}</font><br/><b>Verificable:</b> {verifiable}<br/><b>Bloqueo Previo:</b> {blocks_str}", cell_style),
+                Paragraph(f"<b>Total Frames:</b> {total_frames}<br/><b>Terceros:</b> {third_party}<br/><b>Frames CMP:</b> {cmp_frames}", cell_style)
             ],
             [
-                Paragraph(f"<b>Botones Identificados en Banner:</b> {escape(buttons_list)}", body_style),
+                Paragraph(f"<b>Botones Identificados en Banner:</b> {escape(buttons_list)}", cell_style),
                 "", "", ""
             ]
         ]
@@ -307,18 +376,21 @@ class PdfReportService:
             channels_html = "<br/>".join(channel_lines)
 
             rp_verdict = rp.get("verdict", "OBSERVACION")
+            rp_verdict_display = str(rp_verdict).replace("_", " ")
+            if rp_verdict_display == "OBSERVACION":
+                rp_verdict_display = "OBSERVACIÓN"
 
             resp_table_data = [
                 ["Individualización del Responsable", "Encargado Prevención (DPO)", "Canales de Notificación", "Dictamen Art. 14 ter"],
                 [
-                    Paragraph(ident_html, body_style),
-                    Paragraph(dpo_text, body_style),
-                    Paragraph(channels_html, body_style),
-                    Paragraph(f"<b>{escape(rp_verdict)}</b>", body_style)
+                    Paragraph(ident_html, cell_style),
+                    Paragraph(dpo_text, cell_style),
+                    Paragraph(channels_html, cell_style),
+                    Paragraph(f"<b>{escape(rp_verdict_display)}</b>", cell_style)
                 ]
             ]
 
-            t_resp = Table(resp_table_data, colWidths=[140, 135, 140, 125])
+            t_resp = Table(resp_table_data, colWidths=[140, 140, 140, 120])
             t_resp.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -355,15 +427,16 @@ class PdfReportService:
             for s in stages:
                 doms = ", ".join(s.get("new_tracker_domains", [])) or "Ninguno"
                 cookies = ", ".join(s.get("new_tracker_cookies", [])) or "Ninguna"
+                stage_v = str(s.get("verdict", "")).replace("_", " ")
                 flow_table_data.append([
-                    Paragraph(escape(str(s.get("stage_label", s.get("stage_name", "")))), body_style),
-                    Paragraph(f"<font size='7'>{escape(str(s.get('url', '')))}</font>", body_style),
-                    Paragraph(f"<b>{escape(str(s.get('verdict', '')))}</b>", body_style),
-                    Paragraph(escape(doms), body_style),
-                    Paragraph(escape(cookies), body_style),
+                    Paragraph(escape(str(s.get("stage_label", s.get("stage_name", "")))), cell_style),
+                    Paragraph(f"<font size='7.5'>{escape(str(s.get('url', '')))}</font>", cell_style),
+                    Paragraph(f"<b>{escape(stage_v)}</b>", cell_style),
+                    Paragraph(escape(doms), cell_style),
+                    Paragraph(escape(cookies), cell_style),
                 ])
 
-            t_flow = Table(flow_table_data, colWidths=[90, 160, 70, 110, 110])
+            t_flow = Table(flow_table_data, colWidths=[90, 155, 85, 105, 105])
             t_flow.setStyle(TableStyle([
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0F172A")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -410,17 +483,26 @@ class PdfReportService:
 
                 status_color = "#10B981" if status == "OK" else ("#F59E0B" if status == "WARNING" else "#EF4444")
 
+                pilar_labels = {
+                    "POLITICA_PRIVACIDAD": "Política de Privacidad",
+                    "CANALES_ARCO": "Canales ARCO",
+                    "CONSENTIMIENTO_COOKIES": "Consentimiento y Cookies",
+                    "ACCESIBILIDAD": "Accesibilidad",
+                }
+                pilar_display = escape(pilar_labels.get(str(f.get("pilar", "")), str(f.get("pilar", "")).replace("_", " ").title()))
+                remediation_html = remediation.replace("\n", "<br/>")
+
                 finding_table_data = [
                     [
-                        Paragraph(f"<b>#{idx} [{status}] {title}</b>", ParagraphStyle("Hdr", parent=body_style, fontName="Helvetica-Bold", textColor=colors.HexColor(status_color))),
-                        Paragraph(f"<b>Pilar:</b> {pilar_name}", subtitle_style)
+                        Paragraph(f"<b>#{idx} [{status}] {title}</b>", ParagraphStyle("Hdr", parent=cell_style, fontName="Helvetica-Bold", textColor=colors.HexColor(status_color))),
+                        Paragraph(f"<b>Pilar:</b> {pilar_display}", subtitle_style)
                     ],
                     [
-                        Paragraph(f"<b>Evidencia Técnica:</b> {detail}" + (f"<br/><font face='Courier'>Dato crudo: {raw}</font>" if raw else ""), body_style),
-                        Paragraph(f"<b>Sustento Legal:</b> {art_ley}<br/><b>Principio:</b> {principio}<br/><b>Sanción APDP:</b> {sancion}", body_style)
+                        Paragraph(f"<b>Evidencia Técnica:</b> {detail}" + (f"<br/><font face='Courier' size='8'>Dato crudo: {raw}</font>" if raw else ""), cell_style),
+                        Paragraph(f"<b>Sustento Legal:</b> {art_ley}<br/><b>Principio:</b> {principio}<br/><b>Sanción APDP:</b> {sancion}", cell_style)
                     ],
                     [
-                        Paragraph(f"<b>Ticket Técnico de Remediación:</b> {remediation}", ParagraphStyle("Rem", parent=body_style, fontName="Helvetica", textColor=colors.HexColor("#0369A1"))),
+                        Paragraph(f"<b>Ticket Técnico de Remediación:</b><br/>{remediation_html}", ParagraphStyle("Rem", parent=cell_style, fontName="Helvetica", textColor=colors.HexColor("#0369A1"))),
                         ""
                     ]
                 ]

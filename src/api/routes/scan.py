@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/v1", tags=["Auditoría de Cumplimiento"])
 audit_service = AuditService()
 
 
-@router.post("/scan", response_model=ScanResponse, summary="Auditar sitio web (POST)")
+@router.post("/scan", response_model=ScanResponse, response_model_by_alias=True, summary="Auditar sitio web (POST)")
 async def run_scan_post(
     request: ScanRequest,
     db: Optional[AsyncSession] = Depends(get_db_session)
@@ -25,6 +25,7 @@ async def run_scan_post(
     2. Inspecciona el sitio pasivamente con Playwright (timeout 25s).
     3. Evalúa el cumplimiento normativo (Ley N° 19.628) y genera tickets técnicos de remediación.
     4. Persiste los resultados inmutables en base de datos PostgreSQL.
+    5. Si existe una auditoría válida previa del sitio, adjunta la comparativa evolutiva ('comparison').
     """
     url = request.url.strip()
     if not url:
@@ -40,7 +41,7 @@ async def run_scan_post(
         raise HTTPException(status_code=500, detail=f"Error durante el escaneo: {str(e)}")
 
 
-@router.get("/scan", response_model=ScanResponse, summary="Auditar sitio web (GET para Bookmarklet)")
+@router.get("/scan", response_model=ScanResponse, response_model_by_alias=True, summary="Auditar sitio web (GET para Bookmarklet)")
 async def run_scan_get(
     url: str = Query(..., description="URL a auditar vía GET (útil para Bookmarklets)"),
     db: Optional[AsyncSession] = Depends(get_db_session)

@@ -271,6 +271,7 @@ a { color: inherit; text-decoration: none; }
 .badge.tone-ok { background: rgba(27, 127, 75, 0.15); color: var(--ok); }
 .badge.tone-warn { background: rgba(180, 95, 6, 0.15); color: var(--warn); }
 .badge.tone-fail { background: rgba(198, 40, 40, 0.15); color: var(--fail); }
+.badge.tone-info, .badge.tone-neutral { background: var(--accent-soft); color: var(--accent); }
 .flow-summary-text { font-size: 15px; color: var(--muted); margin-bottom: 24px; }
 .flow-timeline { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
 .flow-stage-card { padding: 20px 24px; border-radius: 12px; background: var(--page); border-left: 4px solid var(--accent); }

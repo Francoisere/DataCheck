@@ -23,6 +23,8 @@ from src.db.models import (
     Hallazgo,
     EvidenciaRastreador
 )
+from src.db.repositories.audit_repository import AuditRepository
+from src.services.comparison_service import ComparisonService
 
 logger = logging.getLogger(__name__)
 
@@ -85,10 +87,37 @@ class AuditService:
                 if saved_audit_id:
                     audit_result["audit_id"] = str(saved_audit_id)
                     audit_result["pdf_report_url"] = f"/api/v1/audits/{saved_audit_id}/pdf"
+
+                    # Calcular comparativa evolutiva si existe una auditoría válida previa (RF-HIST-02)
+                    current_audit = await AuditRepository.get_audit_with_details(db_session, saved_audit_id)
+                    if current_audit and getattr(current_audit, "sitio_id", None) and getattr(current_audit, "ejecutada_en", None):
+                        previous_audit = await AuditRepository.get_previous_valid_audit(
+                            db=db_session,
+                            sitio_id=current_audit.sitio_id,
+                            current_executed_at=current_audit.ejecutada_en,
+                            current_audit_id=current_audit.id,
+                        )
+                        if previous_audit is not None:
+                            audit_result["comparison"] = ComparisonService.compare_audits(
+                                current_audit=current_audit,
+                                previous_audit=previous_audit,
+                            )
             except Exception as e:
                 logger.warning(f"No se pudo persistir la auditoría en PostgreSQL: {e}")
+                try:
+                    await db_session.rollback()
+                except Exception:
+                    pass
 
         return audit_result
+
+    async def run_scan(
+        self,
+        raw_url: str,
+        db_session: Optional[AsyncSession] = None
+    ) -> Dict[str, Any]:
+        """Alias compatible con RF-HIST-02 para execute_audit."""
+        return await self.execute_audit(raw_url=raw_url, db_session=db_session)
 
     async def _persist_audit_result(
         self,
@@ -197,4 +226,5 @@ class AuditService:
                     categoria=get_tracker_category(cookie_name)
                 ))
 
+        await db.flush()
         return auditoria.id
