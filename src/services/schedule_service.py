@@ -21,6 +21,7 @@ from sqlalchemy.orm import selectinload
 from src.db.session import AsyncSessionLocal
 from src.db.models import AuditoriaProgramada, Auditoria, SitioAnalizado, utc_now
 from src.services.audit_service import AuditService
+from src.services.comparison_service import ComparisonService
 from src.services.email_service import EmailService
 from src.services.pdf_report_service import PdfReportService
 
@@ -228,6 +229,15 @@ class ScheduleService:
                 new_audit_id_str = new_audit_result.get("audit_id")
                 new_audit_id = uuid.UUID(new_audit_id_str) if new_audit_id_str else None
 
+                # Calcular comparativa evolutiva si no vino pre-calculada y existe auditoría previa
+                comparison = new_audit_result.get("comparison")
+                if not comparison and schedule.ultima_auditoria:
+                    comparison = ComparisonService.compare_audits(
+                        current_audit=new_audit_result,
+                        previous_audit=schedule.ultima_auditoria,
+                    )
+                    new_audit_result["comparison"] = comparison
+
                 # Generar PDF en memoria
                 pdf_bytes = None
                 try:
@@ -252,7 +262,8 @@ class ScheduleService:
                     verdict_summary=new_audit_result.get("verdict_summary", ""),
                     findings_count=len(new_audit_result.get("findings", [])),
                     pdf_bytes=pdf_bytes,
-                    download_url=download_url
+                    download_url=download_url,
+                    comparison=comparison,
                 )
 
                 # Actualizar estado de la tarea programada

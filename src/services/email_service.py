@@ -1,16 +1,15 @@
 """
 Servicio asíncrono de notificación por correo electrónico para DataCheck.cl.
 Soporta:
-- Renderizado de plantilla HTML con comparativa de auditorías previa vs nueva.
+- Renderizado de plantilla HTML (src/templates/email_notification.html) con comparativa "Antes vs. Después" (RF-HIST-04).
 - Envío SMTP asíncrono con aiosmtplib.
 - Adjunto de reporte técnico en PDF generado en memoria.
 - Modo graceful fallback para entornos locales sin servidor SMTP activo (no rompe el worker).
 """
 
-import io
 import logging
+import os
 from email.message import EmailMessage
-from email.headerregistry import Address
 from typing import Dict, Any, Optional
 
 import aiosmtplib
@@ -18,6 +17,12 @@ import aiosmtplib
 from src.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+TEMPLATE_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)),
+    "templates",
+    "email_notification.html",
+)
 
 
 class EmailService:
@@ -30,70 +35,104 @@ class EmailService:
         previous_score: int,
         verdict_summary: str,
         findings_count: int,
-        download_url: Optional[str] = None
+        download_url: Optional[str] = None,
+        comparison: Optional[Dict[str, Any]] = None,
     ) -> str:
-        """Genera el HTML del correo con la identidad visual de DataCheck.cl."""
+        """Genera el HTML del correo con la identidad visual de DataCheck.cl y comparativa evolutiva."""
         verdict_colors = {
             "APROBADO": "#10B981",
             "CON_OBSERVACIONES": "#F59E0B",
-            "RECHAZADO": "#EF4444"
+            "RECHAZADO": "#EF4444",
+            "NO_ACCESIBLE": "#64748B",
         }
-        color = verdict_colors.get(verdict, "#64748B")
+        verdict_color = verdict_colors.get(verdict, "#64748B")
+
+        score_delta = int(score) - int(previous_score)
+        if comparison and isinstance(comparison.get("score_comparison"), dict):
+            score_delta = int(comparison["score_comparison"].get("delta", score_delta))
+
+        if score_delta > 0:
+            delta_label = f"+{score_delta} pts"
+            delta_color = "#10B981"
+            delta_bg = "rgba(16,185,129,0.18)"
+        elif score_delta < 0:
+            delta_label = f"{score_delta} pts"
+            delta_color = "#EF4444"
+            delta_bg = "rgba(239,68,68,0.18)"
+        else:
+            delta_label = "0 pts (Sin cambio)"
+            delta_color = "#9CA3AF"
+            delta_bg = "rgba(156,163,175,0.18)"
+
+        transition_status = "UNCHANGED"
+        if comparison and isinstance(comparison.get("verdict_transition"), dict):
+            transition_status = comparison["verdict_transition"].get("status", "UNCHANGED")
+        elif score_delta > 0 or (previous_verdict == "RECHAZADO" and verdict == "APROBADO"):
+            transition_status = "IMPROVED"
+        elif score_delta < 0:
+            transition_status = "REGRESSED"
+
+        transition_labels = {
+            "IMPROVED": "Mejoró",
+            "REGRESSED": "Regresión",
+            "UNCHANGED": "Sin cambios",
+        }
+        transition_label = transition_labels.get(transition_status, transition_status)
+
+        trackers_diff_html = ""
+        if comparison and isinstance(comparison.get("trackers_diff"), dict):
+            td = comparison["trackers_diff"]
+            remediated = td.get("remediated") or []
+            persistent = td.get("persistent") or []
+            regressions = td.get("regressions") or []
+
+            parts = []
+            if remediated:
+                items_str = ", ".join(f"<code>{r.get('valor')}</code> ({r.get('tipo')})" for r in remediated)
+                parts.append(f"<p style='margin:6px 0; color:#10B981;'>✅ <strong>Rastreadores Remediados ({len(remediated)}):</strong> {items_str}</p>")
+            if persistent:
+                items_str = ", ".join(f"<code>{p.get('valor')}</code>" for p in persistent)
+                parts.append(f"<p style='margin:6px 0; color:#F59E0B;'>⚠️ <strong>Rastreadores Persistentes ({len(persistent)}):</strong> {items_str}</p>")
+            if regressions:
+                items_str = ", ".join(f"<code>{reg.get('valor')}</code> ({reg.get('tipo')})" for reg in regressions)
+                parts.append(f"<p style='margin:6px 0; color:#EF4444;'>🚨 <strong>Nuevas Regresiones ({len(regressions)}):</strong> {items_str}</p>")
+
+            if parts:
+                trackers_diff_html = "<div class='tracker-box'>" + "".join(parts) + "</div>"
+
+        download_button_html = (
+            f'<a href="{download_url}" class="btn" style="color:#ffffff;">Ver Reporte en DataCheck.cl</a>'
+            if download_url
+            else ""
+        )
+
+        if os.path.exists(TEMPLATE_PATH):
+            with open(TEMPLATE_PATH, "r", encoding="utf-8") as f:
+                template = f.read()
+            return (
+                template.replace("{{target_url}}", str(target_url))
+                .replace("{{verdict}}", str(verdict))
+                .replace("{{score}}", str(score))
+                .replace("{{previous_verdict}}", str(previous_verdict))
+                .replace("{{previous_score}}", str(previous_score))
+                .replace("{{verdict_summary}}", str(verdict_summary))
+                .replace("{{findings_count}}", str(findings_count))
+                .replace("{{verdict_color}}", verdict_color)
+                .replace("{{delta_label}}", delta_label)
+                .replace("{{delta_color}}", delta_color)
+                .replace("{{delta_bg}}", delta_bg)
+                .replace("{{transition_status}}", transition_status)
+                .replace("{{transition_label}}", transition_label)
+                .replace("{{trackers_diff_html}}", trackers_diff_html)
+                .replace("{{download_button_html}}", download_button_html)
+            )
 
         return f"""<!DOCTYPE html>
 <html lang="es">
-<head>
-  <meta charset="utf-8">
-  <style>
-    body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0B0F19; color: #F3F4F6; margin: 0; padding: 24px; }}
-    .container {{ max-width: 600px; margin: 0 auto; background: #171F31; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 28px; }}
-    .header {{ border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 16px; margin-bottom: 20px; }}
-    .logo {{ font-size: 20px; font-weight: 800; color: #F3F4F6; }}
-    .logo-cyan {{ color: #00E5FF; }}
-    .badge {{ display: inline-block; padding: 6px 14px; border-radius: 6px; font-weight: 700; font-size: 14px; background: {color}; color: #FFFFFF; }}
-    .comparison {{ display: flex; justify-content: space-between; background: rgba(11,15,25,0.6); padding: 14px; border-radius: 8px; margin: 20px 0; }}
-    .comp-col {{ flex: 1; text-align: center; }}
-    .btn {{ display: inline-block; background: linear-gradient(135deg, #0284C7, #0EA5E9); color: #FFFFFF; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 700; margin-top: 16px; }}
-    .footer {{ font-size: 11px; color: #64748B; margin-top: 24px; text-align: center; }}
-  </style>
-</head>
 <body>
-  <div class="container">
-    <div class="header">
-      <div class="logo">🛡️ DataCheck<span class="logo-cyan">.cl</span></div>
-      <p style="color: #9CA3AF; margin: 4px 0 0 0; font-size: 13px;">Informe de Re-evaluación Programada de Datos Personales (Ley 21.719)</p>
-    </div>
-
-    <p>Estimado/a usuario,</p>
-    <p>Se ha completado la re-auditoría automática para el sitio: <strong style="color: #00E5FF;">{target_url}</strong>.</p>
-
-    <div style="text-align: center; margin: 24px 0;">
-      <span class="badge">{verdict} ({score}/100 pts)</span>
-    </div>
-
-    <div style="background: rgba(11,15,25,0.6); border: 1px solid rgba(255,255,255,0.08); padding: 14px; border-radius: 8px; font-size: 13px;">
-      <p style="margin: 0 0 8px 0;"><strong>Comparativa de Evolución:</strong></p>
-      <ul style="margin: 0; padding-left: 20px; color: #9CA3AF;">
-        <li>Auditoría Anterior: <strong>{previous_verdict}</strong> ({previous_score} pts)</li>
-        <li>Nueva Auditoría: <strong style="color: {color};">{verdict}</strong> ({score} pts)</li>
-        <li>Evidencias técnicas evaluadas: {findings_count}</li>
-      </ul>
-    </div>
-
-    <p style="font-size: 13px; color: #9CA3AF; line-height: 1.5; margin-top: 16px;">
-      <strong>Diagnóstico:</strong> {verdict_summary}
-    </p>
-
-    <div style="text-align: center; margin: 24px 0;">
-      <p style="font-size: 13px; color: #CBD5E1;">El informe técnico detallado con sustento de la Ley 21.719 se encuentra adjunto en este correo.</p>
-      {f'<a href="{download_url}" class="btn" style="color:#ffffff;">Ver Reporte en DataCheck.cl</a>' if download_url else ''}
-    </div>
-
-    <div class="footer">
-      <p>DataCheck.cl - Plataforma de Auditoría Técnica de Datos Personales (Chile)</p>
-      <p>Este es un correo automático generado por una tarea programada. No responda a este mensaje.</p>
-    </div>
-  </div>
+  <p>Resultado de Re-evaluación para {target_url}: {verdict} ({score}/100 pts, {delta_label}).</p>
+  <p>Anterior: {previous_verdict} ({previous_score} pts) -> Actual: {verdict} ({score} pts).</p>
+  {trackers_diff_html}
 </body>
 </html>"""
 
@@ -109,7 +148,8 @@ class EmailService:
         verdict_summary: str,
         findings_count: int,
         pdf_bytes: Optional[bytes] = None,
-        download_url: Optional[str] = None
+        download_url: Optional[str] = None,
+        comparison: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """
         Despacha el correo de notificación por SMTP asíncrono con el PDF adjunto.
@@ -124,7 +164,8 @@ class EmailService:
             previous_score=previous_score,
             verdict_summary=verdict_summary,
             findings_count=findings_count,
-            download_url=download_url
+            download_url=download_url,
+            comparison=comparison,
         )
 
         message = EmailMessage()
