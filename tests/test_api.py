@@ -95,7 +95,8 @@ async def test_scan_endpoint_post_contract():
             assert response.status_code == 200
             data = response.json()
             assert data["target_url"] == "https://sitio-test.cl/"
-            assert data["verdict"] == "RECHAZADO"
+            assert data["verdict"] == "CON_OBSERVACIONES"
+            assert data["pilares"]["consentimiento_cookies"]["score"] == 16
             assert "findings" in data
             assert len(data["findings"]) > 0
             # Validar que cada finding cuenta con ticket técnico de remediación

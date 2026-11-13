@@ -512,7 +512,7 @@ class RulesEngine:
         # =========================================================================
         # Evaluación flexible por invasividad:
         # - RECHAZADO: Política ausente/inaccesible, carga crítica/masiva de rastreadores (pilar consentimiento < 15/35) o score < 55.
-        # - APROBADO: Score >= 80 sin rastreadores, o score >= 85 con impacto mínimo (pilar consentimiento >= 30/35) y banner válido.
+        # - APROBADO: Score >= 80 sin rastreadores, o score >= 85 con impacto mínimo (pilar consentimiento >= 33/35) y banner válido.
         # - CON_OBSERVACIONES: Score >= 55 (o banner informativo con carga leve), incluyendo rastreadores de baja/media invasividad.
         policy_missing = (not privacy_audit.get("found")) or (privacy_audit.get("http_status") in (0, 404, 500))
 
@@ -534,7 +534,7 @@ class RulesEngine:
                 "Conforme: El sitio web cumple con los estándares auditados de transparencia, "
                 "disponibilidad de políticas y canales para el ejercicio de derechos ARCOP + Bloqueo."
             )
-        elif score >= 85 and has_unauthorized and pilar_consent_score >= 30 and privacy_audit.get("has_mandatory_keywords", False) and not banner_lacks_reject:
+        elif score >= 85 and has_unauthorized and pilar_consent_score >= 33 and privacy_audit.get("has_mandatory_keywords", False) and not banner_lacks_reject:
             verdict = "APROBADO"
             verdict_summary = (
                 "Conforme con observación menor: El sitio web presenta sólida transparencia normativa "

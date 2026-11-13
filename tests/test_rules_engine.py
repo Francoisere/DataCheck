@@ -41,14 +41,20 @@ def test_rules_case_1_aprobado_sitio_conforme():
 
 
 def test_rules_case_2_rechazado_trackers_no_autorizados():
-    """Caso 2: Rechazado (inyección de rastreadores o cookies de terceros previo a consentimiento)."""
+    """Caso 2: Rechazado (carga severa de rastreadores/cookies previo a consentimiento) y validación gradual."""
     scan_data = {
         "target_url": "https://tienda-trackers.cl/",
         "page_load_status": 200,
         "tracker_audit": {
             "has_unauthorized_trackers": True,
-            "detected_tracker_domains": ["google-analytics.com", "connect.facebook.net"],
-            "detected_tracker_cookies": ["_ga", "_fbp"]
+            "detected_tracker_domains": [
+                "google-analytics.com",
+                "connect.facebook.net",
+                "doubleclick.net",
+                "criteo.com",
+                "hotjar.com",
+            ],
+            "detected_tracker_cookies": ["_ga", "_fbp", "_fbc", "_gcl_au", "_hjid"],
         },
         "privacy_policy_audit": {
             "found": True,
@@ -72,17 +78,17 @@ def test_rules_case_2_rechazado_trackers_no_autorizados():
     for f in fail_findings:
         assert "Google Tag Manager" in f["remediation_ticket"] or "cookie" in f["remediation_ticket"].lower()
 
-    # Validar clasificación graduada de invasividad por nivel y peso
+    # Validar clasificación graduada de invasividad por nivel y peso (-1, -2, -3, -4)
     assert get_tracker_invasiveness("googletagmanager.com")["level"] == "BAJA"
-    assert get_tracker_invasiveness("googletagmanager.com")["penalty"] == 3
+    assert get_tracker_invasiveness("googletagmanager.com")["penalty"] == 1
     assert get_tracker_invasiveness("_ga")["level"] == "MEDIA"
-    assert get_tracker_invasiveness("_ga")["penalty"] == 5
+    assert get_tracker_invasiveness("_ga")["penalty"] == 2
     assert get_tracker_invasiveness("hotjar.com")["level"] == "ALTA"
-    assert get_tracker_invasiveness("hotjar.com")["penalty"] == 8
+    assert get_tracker_invasiveness("hotjar.com")["penalty"] == 3
     assert get_tracker_invasiveness("doubleclick.net")["level"] == "CRITICA"
-    assert get_tracker_invasiveness("doubleclick.net")["penalty"] == 10
+    assert get_tracker_invasiveness("doubleclick.net")["penalty"] == 4
 
-    # Validar penalización gradual en caso leve (solo GTM con banner conforme -> 32/35) y moderado (GA + _ga sin banner -> 20/35)
+    # Validar penalización gradual en caso leve (solo GTM con banner conforme -> 34/35) y moderado (GA + _ga sin banner -> 26/35)
     mild_data = dict(scan_data)
     mild_data["tracker_audit"] = {
         "has_unauthorized_trackers": True,
@@ -91,9 +97,9 @@ def test_rules_case_2_rechazado_trackers_no_autorizados():
     }
     mild_data["consent_banner_audit"] = {"banner_detected": True, "has_reject_option": True}
     mild_res = RulesEngine.evaluate(mild_data)
-    assert mild_res["pilares"]["consentimiento_cookies"]["score"] == 32
+    assert mild_res["pilares"]["consentimiento_cookies"]["score"] == 34
     assert mild_res["pilares"]["consentimiento_cookies"]["status"] == "OBSERVACION"
-    assert mild_res["verdict"] in ("APROBADO", "CON_OBSERVACIONES")
+    assert mild_res["verdict"] == "APROBADO"
 
     moderate_data = dict(scan_data)
     moderate_data["tracker_audit"] = {
@@ -102,7 +108,7 @@ def test_rules_case_2_rechazado_trackers_no_autorizados():
         "detected_tracker_cookies": ["_ga"]
     }
     moderate_res = RulesEngine.evaluate(moderate_data)
-    assert moderate_res["pilares"]["consentimiento_cookies"]["score"] == 20
+    assert moderate_res["pilares"]["consentimiento_cookies"]["score"] == 26
     assert moderate_res["pilares"]["consentimiento_cookies"]["status"] == "OBSERVACION"
     assert moderate_res["verdict"] == "CON_OBSERVACIONES"
 

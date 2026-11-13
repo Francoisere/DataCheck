@@ -240,10 +240,10 @@ TAG_MANAGER_DOMAINS = {"googletagmanager.com"}
 LOW_INVASIVENESS_COOKIES = {"_gat", "__hssrc", "_tt_enable_cookie"}
 
 INVASIVENESS_WEIGHTS = {
-    "BAJA": 3,
-    "MEDIA": 5,
-    "ALTA": 8,
-    "CRITICA": 10,
+    "BAJA": 1,
+    "MEDIA": 2,
+    "ALTA": 3,
+    "CRITICA": 4,
 }
 
 _LEVEL_ORDER = {
@@ -299,10 +299,10 @@ def get_tracker_invasiveness(name_or_domain: str) -> dict:
     """
     Clasifica un dominio o cookie de rastreo según su nivel de invasividad
     y retorna el peso de penalización correspondiente en el pilar Consentimiento (35 pts):
-    - BAJA (-3 pts): Gestores de etiquetas y cookies técnicas de control de tasa/estado.
-    - MEDIA (-5 pts): Analítica estadística agregada.
-    - ALTA (-8 pts): Grabación de sesión y mapas de calor.
-    - CRITICA (-10 pts): Publicidad conductual, retargeting y píxeles de redes sociales.
+    - BAJA (-1 pt): Gestores de etiquetas y cookies técnicas de control de tasa/estado.
+    - MEDIA (-2 pts): Analítica estadística agregada.
+    - ALTA (-3 pts): Grabación de sesión y mapas de calor.
+    - CRITICA (-4 pts): Publicidad conductual, retargeting y píxeles de redes sociales.
     """
     raw = name_or_domain.strip().lower()
     domain = raw.split("://")[-1].split("/")[0].split(":")[0]
