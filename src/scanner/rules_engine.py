@@ -81,6 +81,7 @@ class RulesEngine:
                 "consent_banner_audit": None,
                 "frames_audit": None,
                 "responsible_party_audit": None,
+                "flow_discovery": scan_raw_data.get("flow_discovery", {"flow_detected": False, "candidates": []}),
                 "legal_disclaimer": LEGAL_DISCLAIMER
             }
 
@@ -597,5 +598,6 @@ class RulesEngine:
             "consent_banner_audit": banner_audit if banner_detected else consent_banner_audit,
             "frames_audit": frames_audit,
             "responsible_party_audit": responsible_audit,
+            "flow_discovery": scan_raw_data.get("flow_discovery", {"flow_detected": False, "candidates": []}),
             "legal_disclaimer": LEGAL_DISCLAIMER
         }

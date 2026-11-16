@@ -35,6 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let progressTimer = null;
     let scanning = false;
+    let activeFlowRunId = 0;
 
     /* ---------- Utilidades ---------- */
 
@@ -224,40 +225,24 @@ document.addEventListener("DOMContentLoaded", () => {
         clearInterval(progressTimer);
     }
 
-    /* ---------- Escaneo de flujo multietapa ---------- */
+    /* ---------- Escaneo progresivo en 2 fases (3 pilares + flujo automático) ---------- */
 
-    async function scanFlow(target) {
-        errorBox.hidden = true;
-        results.hidden = true;
-        loading.hidden = false;
-        setBusy(true);
-
-        const FLOW_STEPS = [
-            "Iniciando auditoría de flujo multietapa (Nivel 0 pasivo)...",
-            "Cargando página de inicio y descubriendo catálogo...",
-            "Buscando enlaces de registro y cuenta de usuario...",
-            "Localizando carrito o checkout dentro del mismo dominio...",
-            "Verificando pasarelas de pago y cookies acumuladas...",
-            "Consolidando inventario de rastreadores por etapa...",
-        ];
-        let step = 0;
-        loadingStep.textContent = FLOW_STEPS[0];
-        progressFill.style.width = "10%";
-        clearInterval(progressTimer);
-        progressTimer = setInterval(() => {
-            step = Math.min(step + 1, FLOW_STEPS.length - 1);
-            loadingStep.textContent = FLOW_STEPS[step];
-            progressFill.style.width = `${Math.min(95, 10 + step * 15)}%`;
-        }, 3000);
-
-        const t0 = performance.now();
+    async function runProgressiveFlowAudit(targetUrl, parentAuditId, runId) {
+        const flowSec = $("flow-section");
+        const badge = $("flow-verdict-badge");
+        const summaryText = $("flow-summary-text");
+        const timeline = $("flow-timeline");
 
         try {
             const initRes = await fetch("/api/v1/flow-audit", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ url: target }),
+                body: JSON.stringify({
+                    url: targetUrl,
+                    audit_id: parentAuditId || null,
+                }),
             });
+            if (runId !== activeFlowRunId) return;
             if (!initRes.ok) {
                 const err = await initRes.json().catch(() => ({ detail: initRes.statusText }));
                 throw new Error(err.detail || "Error al iniciar auditoría de flujo.");
@@ -270,10 +255,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
             while (attempts < maxAttempts) {
                 await new Promise((r) => setTimeout(r, 2000));
+                if (runId !== activeFlowRunId) return;
                 attempts++;
                 const pollRes = await fetch(`/api/v1/flow-audit/${job_id}`);
                 if (!pollRes.ok) continue;
                 const pollData = await pollRes.json();
+                if (runId !== activeFlowRunId) return;
                 if (pollData.status === "completed") {
                     completedResult = pollData.result;
                     break;
@@ -282,26 +269,30 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
 
+            if (runId !== activeFlowRunId) return;
             if (!completedResult) {
                 throw new Error("Tiempo de espera agotado al auditar el flujo.");
             }
 
-            stopProgress();
-            loading.hidden = true;
-            setBusy(false);
-            renderFlowResults(completedResult, performance.now() - t0);
+            appendFlowResults(completedResult, runId);
         } catch (e) {
-            stopProgress();
-            loading.hidden = true;
-            setBusy(false);
-            errorMessage.textContent = e.message || "Error al auditar el flujo.";
-            errorBox.hidden = false;
+            if (runId !== activeFlowRunId || !flowSec) return;
+            if (badge) {
+                badge.className = "badge tone-warn";
+                badge.textContent = "No disponible";
+            }
+            if (summaryText) {
+                summaryText.textContent = "No se pudo completar el recorrido automático del flujo: " + (e.message || "Error inesperado.");
+            }
+            if (timeline) {
+                timeline.innerHTML = "";
+            }
         }
     }
 
     /* ---------- Escaneo ---------- */
 
-    async function scan(raw, forceNormal = false) {
+    async function scan(raw) {
         if (scanning) return;
         const parsed = parseTarget(raw);
         if (parsed.error) {
@@ -312,11 +303,7 @@ document.addEventListener("DOMContentLoaded", () => {
         clearFieldError();
         const target = parsed.url;
         urlInput.value = target;
-
-        const flowChecked = $("flow-checkbox") && $("flow-checkbox").checked;
-        if (flowChecked && !forceNormal) {
-            return scanFlow(target);
-        }
+        activeFlowRunId++;
 
         errorBox.hidden = true;
         results.hidden = true;
@@ -756,7 +743,54 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    /* ---------- Render del informe estándar ---------- */
+    function renderFindingCardHtml(f, isFlow = false) {
+        const t = FINDING_TONE[f.status] || "info";
+        const pilarText = isFlow ? `Etapa: ${esc(f.stage_label)}` : esc(pilarName(f.pilar));
+        const ticket = f.remediation_ticket
+            ? (isFlow
+                ? `<div class="ticket">
+                       <div class="ticket-head">
+                           <p class="ticket-title">${icon("i-wrench", 16)}Cómo corregirlo (${esc(f.stage_label)})</p>
+                           ${f.technical_raw ? `<code>${esc(f.technical_raw)}</code>` : ""}
+                       </div>
+                       <p>${esc(f.remediation_ticket)}</p>
+                   </div>`
+                : `<div class="ticket">
+                       <div class="ticket-head">
+                           <p class="ticket-title">${icon("i-wrench", 16)}Instrucción Técnica de Remediación</p>
+                           <div class="ticket-actions">
+                               ${f.technical_raw ? `<code>${esc(f.technical_raw)}</code>` : ""}
+                               <button type="button" class="btn-copy-ticket" title="Copiar instrucción de remediación al portapapeles">Copiar Instrucción</button>
+                           </div>
+                       </div>
+                       <pre class="ticket-content"><code>${esc(f.remediation_ticket)}</code></pre>
+                   </div>`)
+            : "";
+
+        let itemsHtml = "";
+        if (f.items && Array.isArray(f.items) && f.items.length) {
+            const isCookie = (f.title || "").toLowerCase().includes("cookie");
+            const pillClass = isCookie ? "flow-pill pill-cookie" : "flow-pill pill-domain";
+            const itemIcon = isCookie ? "🍪 " : "🌐 ";
+            itemsHtml = `<div class="consent-pills-list" style="margin: 8px 0 6px 0; display: flex; flex-wrap: wrap; gap: 6px;">` +
+                f.items.map(it => `<span class="${pillClass}" style="font-size: 0.8rem; padding: 2px 8px;">${itemIcon}${esc(it)}</span>`).join("") +
+                `</div>`;
+        }
+
+        return `
+            <li class="finding tone-${t}">
+                ${icon(TONE_ICON[t], 22)}
+                <div class="finding-body">
+                    <p class="finding-pilar">${pilarText}</p>
+                    <h4>${esc(f.title)}</h4>
+                    <p class="finding-detail">${esc(f.detail)}</p>
+                    ${itemsHtml}
+                    ${ticket}
+                </div>
+            </li>`;
+    }
+
+    /* ---------- Render del informe estándar + flujo progresivo ---------- */
 
     function renderResults(data, elapsedMs) {
         const tone = toneOf(data.verdict);
@@ -795,44 +829,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const list = $("findings-list");
         if (data.findings && data.findings.length) {
-            list.innerHTML = data.findings
-                .map((f) => {
-                    const t = FINDING_TONE[f.status] || "info";
-                    const ticket = f.remediation_ticket
-                        ? `<div class="ticket">
-                               <div class="ticket-head">
-                                   <p class="ticket-title">${icon("i-wrench", 16)}Instrucción Técnica de Remediación</p>
-                                   <div class="ticket-actions">
-                                       ${f.technical_raw ? `<code>${esc(f.technical_raw)}</code>` : ""}
-                                       <button type="button" class="btn-copy-ticket" title="Copiar instrucción de remediación al portapapeles">Copiar Instrucción</button>
-                                   </div>
-                               </div>
-                               <pre class="ticket-content"><code>${esc(f.remediation_ticket)}</code></pre>
-                           </div>`
-                        : "";
-                    let itemsHtml = "";
-                    if (f.items && Array.isArray(f.items) && f.items.length) {
-                        const isCookie = (f.title || "").toLowerCase().includes("cookie");
-                        const pillClass = isCookie ? "flow-pill pill-cookie" : "flow-pill pill-domain";
-                        const itemIcon = isCookie ? "🍪 " : "🌐 ";
-                        itemsHtml = `<div class="consent-pills-list" style="margin: 8px 0 6px 0; display: flex; flex-wrap: wrap; gap: 6px;">` +
-                            f.items.map(it => `<span class="${pillClass}" style="font-size: 0.8rem; padding: 2px 8px;">${itemIcon}${esc(it)}</span>`).join("") +
-                            `</div>`;
-                    }
-
-                    return `
-                        <li class="finding tone-${t}">
-                            ${icon(TONE_ICON[t], 22)}
-                            <div class="finding-body">
-                                <p class="finding-pilar">${esc(pilarName(f.pilar))}</p>
-                                <h4>${esc(f.title)}</h4>
-                                <p class="finding-detail">${esc(f.detail)}</p>
-                                ${itemsHtml}
-                                ${ticket}
-                            </div>
-                        </li>`;
-                })
-                .join("");
+            list.innerHTML = data.findings.map((f) => renderFindingCardHtml(f, false)).join("");
         } else {
             list.innerHTML = '<li class="finding"><p class="muted">No se registraron hallazgos adicionales.</p></li>';
         }
@@ -856,142 +853,144 @@ document.addEventListener("DOMContentLoaded", () => {
             scheduleCard.hidden = true;
         }
 
+        // Fase 2 automática: si Fase 1 detectó flujo comercial, iniciar auditoría de flujo en segundo plano
+        const flowDisc = data.flow_discovery;
+        if (flowSec && flowDisc && flowDisc.flow_detected) {
+            flowSec.hidden = false;
+            const badge = $("flow-verdict-badge");
+            const summaryText = $("flow-summary-text");
+            const timeline = $("flow-timeline");
+            const limitDiv = $("flow-limitations");
+            const candidateLabels = (flowDisc.candidates || [])
+                .map((c) => c.stage_label || c.stage_name)
+                .filter(Boolean)
+                .join(" → ");
+
+            if (badge) {
+                badge.className = "badge tone-info";
+                badge.textContent = "Auditando flujo...";
+            }
+            if (summaryText) {
+                summaryText.textContent = candidateLabels
+                    ? `Flujo comercial detectado automáticamente (${candidateLabels}). Analizando etapas en segundo plano...`
+                    : "Flujo comercial detectado automáticamente. Analizando etapas en segundo plano...";
+            }
+            if (timeline) {
+                timeline.innerHTML = `
+                    <div class="flow-stage-card tone-info">
+                        <div class="flow-stage-header">
+                            <span class="flow-stage-title" style="display:inline-flex;align-items:center;gap:8px;">
+                                <svg class="icon spin" width="16" height="16" aria-hidden="true"><use href="#i-loader"/></svg>
+                                Recorriendo etapas del flujo de compra/registro (Nivel 0 pasivo)...
+                            </span>
+                        </div>
+                        <p class="muted small">Los resultados de los 3 pilares ya están disponibles; esta sección se actualizará automáticamente al finalizar el recorrido.</p>
+                    </div>
+                `;
+            }
+            if (limitDiv) limitDiv.innerHTML = "";
+
+            const runId = ++activeFlowRunId;
+            runProgressiveFlowAudit(data.target_url, data.audit_id, runId);
+        }
+
         results.hidden = false;
         results.scrollIntoView({ behavior: "smooth", block: "start" });
         animateGauge(data.score);
     }
 
-    /* ---------- Render del informe de flujo multietapa ---------- */
+    /* ---------- Integración progresiva del informe de flujo multietapa ---------- */
 
-    function renderFlowResults(data, elapsedMs) {
+    function appendFlowResults(flowData, runId) {
+        if (runId !== activeFlowRunId) return;
         const flowSec = $("flow-section");
-        if (flowSec) flowSec.hidden = false;
-        if ($("comparison-section")) $("comparison-section").hidden = true;
-        if ($("consent-section")) $("consent-section").hidden = true;
-        if ($("responsible-section")) $("responsible-section").hidden = true;
-        if (scheduleCard) scheduleCard.hidden = true;
-        lastReport = data;
-        if (btnPdf) btnPdf.disabled = false;
-        pdfError.hidden = true;
-
-        const tone = toneOf(data.flow_verdict);
-        $("verdict-band").className = `verdict tone-${tone}`;
-        showSiteInfo(data.target_url, elapsedMs);
-        $("verdict-title").textContent = `Flujo: ${prettify(data.flow_verdict)}`;
-        $("verdict-summary").textContent = data.flow_verdict_summary || "";
-        $("report-date").textContent = "Auditoría de flujo completada el " + new Date().toLocaleString("es-CL", { dateStyle: "long", timeStyle: "short" });
-
-        // Ocultar pilares estándar en la vista de flujo
-        $("pilares").innerHTML = "";
+        if (!flowSec) return;
 
         const badge = $("flow-verdict-badge");
+        const summaryText = $("flow-summary-text");
+        const timeline = $("flow-timeline");
+        const limitDiv = $("flow-limitations");
+
+        if (!flowData || !flowData.flow_detected) {
+            flowSec.hidden = false;
+            if (badge) {
+                badge.className = "badge tone-info";
+                badge.textContent = "No aplicable";
+            }
+            if (summaryText) {
+                summaryText.textContent = (flowData && flowData.flow_not_detected_reason) ||
+                    "No se confirmaron etapas navegables de flujo de compra en el dominio.";
+            }
+            if (timeline) timeline.innerHTML = "";
+            if (limitDiv) limitDiv.innerHTML = "";
+            return;
+        }
+
+        const tone = toneOf(flowData.flow_verdict);
+        flowSec.hidden = false;
+
         if (badge) {
             badge.className = `badge tone-${tone}`;
-            badge.textContent = prettify(data.flow_verdict);
+            badge.textContent = prettify(flowData.flow_verdict);
         }
-
-        const summaryText = $("flow-summary-text");
         if (summaryText) {
-            summaryText.textContent = data.flow_verdict_summary || "";
+            summaryText.textContent = flowData.flow_verdict_summary || "";
         }
-
-        const timeline = $("flow-timeline");
         if (timeline) {
-            if (!data.flow_detected) {
-                timeline.innerHTML = `
-                    <div class="flow-stage-card tone-warn">
+            timeline.innerHTML = (flowData.stages_evaluated || []).map((s, idx) => {
+                const sTone = toneOf(s.verdict);
+                const domPills = (s.new_tracker_domains || []).map(d => `<span class="flow-pill pill-domain">🌐 ${esc(d)}</span>`).join("");
+                const ckPills = (s.new_tracker_cookies || []).map(c => `<span class="flow-pill pill-cookie">🍪 ${esc(c)}</span>`).join("");
+                const note = s.verification_note ? `<p class="flow-note">${esc(s.verification_note)}</p>` : "";
+                return `
+                    <div class="flow-stage-card tone-${sTone}">
                         <div class="flow-stage-header">
-                            <span class="flow-stage-title">Flujo de compra/registro no detectado</span>
+                            <span class="flow-stage-title">Etapa ${idx + 1}: ${esc(s.stage_label || s.stage_name)}</span>
+                            <span class="badge tone-${sTone}">${esc(prettify(s.verdict))}</span>
                         </div>
-                        <p class="flow-stage-url">${esc(data.flow_not_detected_reason || "No se identificaron enlaces al catálogo, registro o carrito en el mismo dominio.")}</p>
-                        <p class="muted" style="margin-top:8px;">Puedes ejecutar el análisis estándar para revisar la política de privacidad, canales ARCO y cookies pre-consentimiento.</p>
-                        <button type="button" id="btn-fallback-scan" class="btn-primary" style="margin-top:14px;height:42px;font-size:14px;padding:0 20px;">
-                            ${icon("i-search", 16)} Ejecutar auditoría estándar
-                        </button>
+                        <p class="flow-stage-url"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a></p>
+                        <div class="flow-stage-meta">
+                            ${domPills || ckPills ? `<span><b>Nuevos rastreadores:</b></span> ${domPills} ${ckPills}` : `<span class="muted">Sin nuevos rastreadores detectados en esta etapa</span>`}
+                        </div>
+                        ${note}
                     </div>
                 `;
-                const fbBtn = $("btn-fallback-scan");
-                if (fbBtn) {
-                    fbBtn.onclick = () => scan(data.target_url, true);
-                }
-            } else {
-                timeline.innerHTML = (data.stages_evaluated || []).map((s, idx) => {
-                    const sTone = toneOf(s.verdict);
-                    const domPills = (s.new_tracker_domains || []).map(d => `<span class="flow-pill pill-domain">🌐 ${esc(d)}</span>`).join("");
-                    const ckPills = (s.new_tracker_cookies || []).map(c => `<span class="flow-pill pill-cookie">🍪 ${esc(c)}</span>`).join("");
-                    const note = s.verification_note ? `<p class="flow-note">${esc(s.verification_note)}</p>` : "";
-                    return `
-                        <div class="flow-stage-card tone-${sTone}">
-                            <div class="flow-stage-header">
-                                <span class="flow-stage-title">Etapa ${idx + 1}: ${esc(s.stage_label || s.stage_name)}</span>
-                                <span class="badge tone-${sTone}">${esc(prettify(s.verdict))}</span>
-                            </div>
-                            <p class="flow-stage-url"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a></p>
-                            <div class="flow-stage-meta">
-                                ${domPills || ckPills ? `<span><b>Nuevos rastreadores:</b></span> ${domPills} ${ckPills}` : `<span class="muted">Sin nuevos rastreadores detectados en esta etapa</span>`}
-                            </div>
-                            ${note}
-                        </div>
-                    `;
-                }).join("");
-            }
+            }).join("");
         }
 
-        const limitDiv = $("flow-limitations");
         if (limitDiv) {
-            if (data.limitations && data.limitations.length) {
+            if (flowData.limitations && flowData.limitations.length) {
                 limitDiv.innerHTML = `
                     <b>Limitaciones declaradas (Nivel 0 pasivo):</b>
-                    <ul>${data.limitations.map(l => `<li>${esc(l)}</li>`).join("")}</ul>
+                    <ul>${flowData.limitations.map(l => `<li>${esc(l)}</li>`).join("")}</ul>
                 `;
             } else {
                 limitDiv.innerHTML = "";
             }
         }
 
+        // Agregar hallazgos del flujo al final de #findings-list sin borrar los hallazgos de los 3 pilares
         const list = $("findings-list");
-        if (data.flow_findings && data.flow_findings.length) {
-            list.innerHTML = data.flow_findings.map((f) => {
-                const t = FINDING_TONE[f.status] || "info";
-                const ticket = f.remediation_ticket
-                    ? `<div class="ticket">
-                           <div class="ticket-head">
-                               <p class="ticket-title">${icon("i-wrench", 16)}Cómo corregirlo (${esc(f.stage_label)})</p>
-                               ${f.technical_raw ? `<code>${esc(f.technical_raw)}</code>` : ""}
-                           </div>
-                           <p>${esc(f.remediation_ticket)}</p>
-                       </div>`
-                    : "";
-                let flowItemsHtml = "";
-                if (f.items && Array.isArray(f.items) && f.items.length) {
-                    const isCookie = (f.title || "").toLowerCase().includes("cookie");
-                    const pillClass = isCookie ? "flow-pill pill-cookie" : "flow-pill pill-domain";
-                    const itemIcon = isCookie ? "🍪 " : "🌐 ";
-                    flowItemsHtml = `<div class="consent-pills-list" style="margin: 8px 0 6px 0; display: flex; flex-wrap: wrap; gap: 6px;">` +
-                        f.items.map(it => `<span class="${pillClass}" style="font-size: 0.8rem; padding: 2px 8px;">${itemIcon}${esc(it)}</span>`).join("") +
-                        `</div>`;
-                }
-
-                return `
-                    <li class="finding tone-${t}">
-                        ${icon(TONE_ICON[t], 22)}
-                        <div class="finding-body">
-                            <p class="finding-pilar">Etapa: ${esc(f.stage_label)}</p>
-                            <h4>${esc(f.title)}</h4>
-                            <p class="finding-detail">${esc(f.detail)}</p>
-                            ${flowItemsHtml}
-                            ${ticket}
-                        </div>
-                    </li>`;
-            }).join("");
-        } else {
-            list.innerHTML = '<li class="finding"><p class="muted">No se registraron hallazgos adicionales en el flujo.</p></li>';
+        if (list && flowData.flow_findings && flowData.flow_findings.length) {
+            const extraHtml = flowData.flow_findings.map((f) => renderFindingCardHtml(f, true)).join("");
+            if (list.children.length === 1 && list.firstElementChild && list.firstElementChild.textContent.includes("No se registraron hallazgos adicionales")) {
+                list.innerHTML = extraHtml;
+            } else {
+                list.insertAdjacentHTML("beforeend", extraHtml);
+            }
         }
 
-        results.hidden = false;
-        results.scrollIntoView({ behavior: "smooth", block: "start" });
-        const flowScore = data.flow_verdict === "CUMPLE" ? 100 : (data.flow_verdict === "NO_VERIFICABLE" ? 50 : 0);
-        animateGauge(flowScore);
+        // Combinar payload para que el PDF generado al vuelo incluya 3 pilares + flujo de compra
+        if (lastReport) {
+            lastReport = {
+                ...lastReport,
+                flow_verdict: flowData.flow_verdict,
+                flow_verdict_summary: flowData.flow_verdict_summary,
+                stages_evaluated: flowData.stages_evaluated || [],
+                flow_findings: flowData.flow_findings || [],
+                limitations: flowData.limitations || [],
+            };
+        }
     }
 
     /* ---------- Descarga del informe en PDF (servicio del backend) ---------- */

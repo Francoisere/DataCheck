@@ -158,7 +158,7 @@ class WebInspector:
         """
         Ejecuta la inspección pasiva en un contexto aislado de Chromium.
         """
-        normalized_url, _ = sanitize_url(raw_url)
+        normalized_url, base_domain = sanitize_url(raw_url)
 
         traffic_capture = TrafficCapture()
 
@@ -304,7 +304,8 @@ class WebInspector:
                             "contact_email": None,
                             "postal_address": None,
                             "dpo_email": None
-                        }
+                        },
+                        "flow_discovery": {"flow_detected": False, "candidates": []}
                     }
 
                 # Pausa breve para capturar scripts asíncronos iniciales
@@ -359,6 +360,12 @@ class WebInspector:
                     policy_found=privacy_audit.get("found", False)
                 )
 
+                # Autodetección de flujo comercial en memoria sobre la portada ya descargada
+                from .flow_inspector import FlowInspector
+                flow_discovery = FlowInspector().discover_candidates_from_html(
+                    html_content, normalized_url, base_domain
+                )
+
                 return {
                     "target_url": normalized_url,
                     "page_load_status": page_load_status,
@@ -375,7 +382,8 @@ class WebInspector:
                     "arco_channels_audit": arco_channels,
                     "consent_banner_audit": consent_banner_audit,
                     "frames_audit": frames_audit,
-                    "responsible_party_audit": responsible_audit
+                    "responsible_party_audit": responsible_audit,
+                    "flow_discovery": flow_discovery
                 }
 
             finally:
@@ -553,5 +561,6 @@ class WebInspector:
                 "contact_email": None,
                 "postal_address": None,
                 "dpo_email": None
-            }
+            },
+            "flow_discovery": {"flow_detected": False, "candidates": []}
         }
