@@ -157,14 +157,6 @@ a { color: inherit; text-decoration: none; }
 .flow-toggle { display: inline-flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 500; color: var(--ink); cursor: pointer; }
 .flow-toggle input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
 
-.examples { margin-top: 16px; font-size: 14px; color: var(--muted); }
-.link-btn {
-    font: inherit; font-weight: 500; color: var(--accent);
-    background: none; border: 0; cursor: pointer;
-    text-decoration: underline; text-underline-offset: 4px;
-}
-.link-btn:hover { color: var(--ink); }
-.link-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Carga y error */
 .loading { max-width: 780px; margin-top: 32px; }
@@ -231,6 +223,7 @@ a { color: inherit; text-decoration: none; }
 
 .findings { padding: 32px 40px; }
 .findings-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.findings-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
 .findings h3 { font-size: 24px; letter-spacing: -0.02em; }
 
 .btn-ghost {
@@ -250,6 +243,19 @@ a { color: inherit; text-decoration: none; }
 .finding-pilar { font-size: 14px; color: var(--muted); }
 .finding h4 { font-size: 16px; font-weight: 600; }
 .finding-detail { max-width: 680px; margin-top: 4px; font-size: 14px; color: var(--body); }
+
+/* Detalle desplegable: el ticket y los elementos detectados quedan ocultos hasta que se abre el hallazgo */
+.finding-toggle {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 12px; padding: 6px 12px;
+    font: inherit; font-size: 13px; font-weight: 600; color: var(--accent);
+    background: var(--accent-soft); border: 1px solid transparent; border-radius: 8px; cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+.finding-toggle:hover { border-color: var(--accent); }
+.finding-toggle .icon { transition: transform 0.2s ease; }
+.finding.is-open .finding-toggle .icon { transform: rotate(180deg); }
+.finding-extra { display: none; }
+.finding.is-open .finding-extra { display: block; }
 
 .ticket { margin-top: 16px; padding: 14px 16px; background: var(--page); border-left: 4px solid var(--accent); border-radius: 8px; }
 .ticket-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
@@ -274,6 +280,7 @@ a { color: inherit; text-decoration: none; }
     max-height: 280px; overflow-y: auto;
 }
 .ticket p { margin-top: 8px; font-size: 14px; color: var(--body); }
+.ticket .ticket-content code { padding: 0; background: none; border: 0; border-radius: 0; font-size: inherit; overflow-wrap: normal; }
 
 /* Sección de flujo */
 .flow-section { padding: 32px 40px; border-bottom: 1px solid var(--line); }
@@ -318,11 +325,12 @@ a { color: inherit; text-decoration: none; }
 /* Re-auditoría programada por correo */
 .schedule-card { margin-top: 16px; padding: 28px 32px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
 .schedule-head { display: flex; gap: 16px; align-items: flex-start; }
+.schedule-head > div { min-width: 0; flex: 1; }
 .schedule-icon { display: grid; place-items: center; width: 46px; height: 46px; flex-shrink: 0; color: var(--accent); background: var(--accent-soft); border-radius: 12px; }
 .schedule-head h3 { font-size: 18px; letter-spacing: -0.01em; line-height: 1.3; }
-.schedule-head p { max-width: 560px; margin-top: 4px; }
-.schedule-form { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; margin-top: 20px; }
-.schedule-inputs { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 640px; }
+.schedule-head p { margin-top: 4px; }
+.schedule-form { display: flex; flex-direction: column; align-items: stretch; gap: 16px; margin-top: 20px; width: 100%; }
+.schedule-inputs { display: flex; flex-direction: column; gap: 14px; width: 100%; }
 .schedule-inputs input[type="email"] {
     width: 100%; height: 48px; padding: 0 16px;
     font: inherit; font-size: 16px; color: var(--ink);
@@ -342,7 +350,7 @@ a { color: inherit; text-decoration: none; }
 .schedule-radio-text { display: flex; flex-direction: column; gap: 2px; }
 .schedule-radio-text strong { font-size: 14px; font-weight: 600; color: var(--ink); }
 .schedule-radio-text span { font-size: 13px; color: var(--muted); }
-.schedule-form .btn-primary { height: 46px; padding: 0 24px; border-radius: 10px; }
+.schedule-form .btn-primary { width: 100%; height: 48px; padding: 0 24px; border-radius: 10px; }
 
 /* Barra de re-auditoría dentro de la comparativa */
 .reaudit-bar {
@@ -428,6 +436,7 @@ a { color: inherit; text-decoration: none; }
     .schedule-modes { grid-template-columns: 1fr; }
     .reaudit-bar .btn-secondary, .reaudit-bar .btn-primary { width: 100%; }
     .findings-head { flex-wrap: wrap; }
+    .findings-actions { width: 100%; justify-content: flex-start; }
 }
 
 @media (prefers-reduced-motion: reduce) {
