@@ -841,6 +841,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const list = $("findings-list");
         if (data.findings && data.findings.length) {
 <<<<<<< HEAD
+<<<<<<< HEAD
             list.innerHTML = data.findings.map((f) => renderFindingCardHtml(f, false)).join("");
 =======
             list.innerHTML = data.findings
@@ -882,6 +883,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 })
                 .join("");
 >>>>>>> 022eb2add5093f3313b8150ddb558f5fc95863d9
+=======
+            list.innerHTML = data.findings.map((f) => renderFindingCardHtml(f, false)).join("");
+>>>>>>> 1244a981817ee1dd2424008c219e02e2a562ad62
         } else {
             list.innerHTML = '<li class="finding"><p class="muted">No se registraron hallazgos adicionales.</p></li>';
         }
@@ -1008,6 +1012,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     </div>
                 `;
 <<<<<<< HEAD
+<<<<<<< HEAD
             }).join("");
 =======
                 const fbBtn = $("btn-fallback-scan");
@@ -1036,6 +1041,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 }).join("");
             }
 >>>>>>> 022eb2add5093f3313b8150ddb558f5fc95863d9
+=======
+            }).join("");
+>>>>>>> 1244a981817ee1dd2424008c219e02e2a562ad62
         }
 
         if (limitDiv) {
@@ -1052,6 +1060,9 @@ document.addEventListener("DOMContentLoaded", () => {
         // Agregar hallazgos del flujo al final de #findings-list sin borrar los hallazgos de los 3 pilares
         const list = $("findings-list");
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 1244a981817ee1dd2424008c219e02e2a562ad62
         if (list && flowData.flow_findings && flowData.flow_findings.length) {
             const extraHtml = flowData.flow_findings.map((f) => renderFindingCardHtml(f, true)).join("");
             if (list.children.length === 1 && list.firstElementChild && list.firstElementChild.textContent.includes("No se registraron hallazgos adicionales")) {
@@ -1059,6 +1070,7 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 list.insertAdjacentHTML("beforeend", extraHtml);
             }
+<<<<<<< HEAD
 =======
         if (data.flow_findings && data.flow_findings.length) {
             list.innerHTML = data.flow_findings.map((f) => {
@@ -1097,6 +1109,8 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             list.innerHTML = '<li class="finding"><p class="muted">No se registraron hallazgos adicionales en el flujo.</p></li>';
 >>>>>>> 022eb2add5093f3313b8150ddb558f5fc95863d9
+=======
+>>>>>>> 1244a981817ee1dd2424008c219e02e2a562ad62
         }
 
         // Combinar payload para que el PDF generado al vuelo incluya 3 pilares + flujo de compra
