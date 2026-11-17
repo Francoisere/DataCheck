@@ -1047,7 +1047,6 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 list.insertAdjacentHTML("beforeend", extraHtml);
             }
-            syncExpandAll();
         }
 
         // Combinar payload para que el PDF generado al vuelo incluya 3 pilares + flujo de compra
