@@ -89,13 +89,13 @@ class EmailService:
             parts = []
             if remediated:
                 items_str = ", ".join(f"<code>{r.get('valor')}</code> ({r.get('tipo')})" for r in remediated)
-                parts.append(f"<p style='margin:6px 0; color:#10B981;'>✅ <strong>Rastreadores Remediados ({len(remediated)}):</strong> {items_str}</p>")
+                parts.append(f"<p style='margin:6px 0; color:#10B981;'><strong>Rastreadores Remediados ({len(remediated)}):</strong> {items_str}</p>")
             if persistent:
                 items_str = ", ".join(f"<code>{p.get('valor')}</code>" for p in persistent)
-                parts.append(f"<p style='margin:6px 0; color:#F59E0B;'>⚠️ <strong>Rastreadores Persistentes ({len(persistent)}):</strong> {items_str}</p>")
+                parts.append(f"<p style='margin:6px 0; color:#F59E0B;'><strong>Rastreadores Persistentes ({len(persistent)}):</strong> {items_str}</p>")
             if regressions:
                 items_str = ", ".join(f"<code>{reg.get('valor')}</code> ({reg.get('tipo')})" for reg in regressions)
-                parts.append(f"<p style='margin:6px 0; color:#EF4444;'>🚨 <strong>Nuevas Regresiones ({len(regressions)}):</strong> {items_str}</p>")
+                parts.append(f"<p style='margin:6px 0; color:#EF4444;'><strong>Nuevas Regresiones ({len(regressions)}):</strong> {items_str}</p>")
 
             if parts:
                 trackers_diff_html = "<div class='tracker-box'>" + "".join(parts) + "</div>"
