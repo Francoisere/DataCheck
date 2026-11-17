@@ -12,7 +12,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const errorBox = $("error");
     const errorMessage = $("error-message");
     const results = $("results");
-    const examples = document.querySelectorAll(".link-btn");
     const urlError = $("url-error");
 
     const STEPS = [
@@ -36,6 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let progressTimer = null;
     let scanning = false;
     let activeFlowRunId = 0;
+    let findingSeq = 0;
 
     /* ---------- Utilidades ---------- */
 
@@ -104,6 +104,42 @@ document.addEventListener("DOMContentLoaded", () => {
 
     /* ---------- Datos del sitio auditado ---------- */
 
+    // Orden de búsqueda del ícono: 1) favicon.ico del propio sitio; 2) servicio de favicons de Google
+    // (resuelve los sitios que declaran el ícono solo en el HTML o que no exponen /favicon.ico);
+    // 3) ícono genérico. Para no consultar a Google, borra el segundo elemento de la lista.
+    const FAVICON_SERVICE = (host) =>
+        `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`;
+    let iconRun = 0;
+
+    function loadSiteIcon(origin, img, fallback) {
+        const run = ++iconRun;
+        const showFallback = () => {
+            img.toggleAttribute("hidden", true);
+            fallback.toggleAttribute("hidden", false);
+        };
+        showFallback();
+        if (!origin) return;
+
+        let host = "";
+        try { host = new URL(origin).hostname; } catch (e) {}
+        const sources = [origin + "/favicon.ico"];
+        if (host) sources.push(FAVICON_SERVICE(host));
+
+        let idx = 0;
+        img.onload = () => {
+            if (run !== iconRun) return;
+            img.toggleAttribute("hidden", false);
+            fallback.toggleAttribute("hidden", true);
+        };
+        img.onerror = () => {
+            if (run !== iconRun) return;
+            idx++;
+            if (idx < sources.length) img.src = sources[idx];
+            else showFallback();
+        };
+        img.src = sources[0];
+    }
+
     function showSiteInfo(targetUrl, elapsedMs) {
         const link = $("report-url");
         const img = $("site-favicon");
@@ -121,20 +157,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (origin) link.setAttribute("href", targetUrl);
         else link.removeAttribute("href");
 
-        // Ícono: se pide directamente al sitio auditado, sin servicios de terceros
-        img.toggleAttribute("hidden", true);
-        fallback.toggleAttribute("hidden", false);
-        if (origin) {
-            img.onload = () => {
-                img.toggleAttribute("hidden", false);
-                fallback.toggleAttribute("hidden", true);
-            };
-            img.onerror = () => {
-                img.toggleAttribute("hidden", true);
-                fallback.toggleAttribute("hidden", false);
-            };
-            img.src = origin + "/favicon.ico";
-        }
+        loadSiteIcon(origin, img, fallback);
 
         const ok = Number.isFinite(elapsedMs);
         meta.toggleAttribute("hidden", !ok);
@@ -201,7 +224,6 @@ document.addEventListener("DOMContentLoaded", () => {
         btnIcon.innerHTML = `<use href="#${busy ? "i-loader" : "i-search"}"/>`;
         btnIcon.classList.toggle("spin", busy);
         btnLabel.textContent = busy ? "Revisando" : "Revisar sitio";
-        examples.forEach((b) => (b.disabled = busy));
         updateButton();
     }
 
@@ -788,17 +810,52 @@ document.addEventListener("DOMContentLoaded", () => {
                 `</div>`;
         }
 
+        const hasExtra = Boolean(itemsHtml || ticket);
+        const extraId = `finding-extra-${++findingSeq}`;
+        const toggle = hasExtra
+            ? `<button type="button" class="finding-toggle" aria-expanded="false" aria-controls="${extraId}">
+                   <span class="finding-toggle-label">${isFlow ? "Ver recomendación" : "Ver instrucción técnica"}</span>
+                   ${icon("i-chevron-down", 16)}
+               </button>`
+            : "";
+        const extra = hasExtra
+            ? `<div class="finding-extra" id="${extraId}">${itemsHtml}${ticket}</div>`
+            : "";
+
         return `
-            <li class="finding tone-${t}">
+            <li class="finding tone-${t}${hasExtra ? " is-expandable" : ""}">
                 ${icon(TONE_ICON[t], 22)}
                 <div class="finding-body">
                     <p class="finding-pilar">${pilarText}</p>
                     <h4>${esc(f.title)}</h4>
                     <p class="finding-detail">${esc(f.detail)}</p>
-                    ${itemsHtml}
-                    ${ticket}
+                    ${toggle}
+                    ${extra}
                 </div>
             </li>`;
+    }
+
+    /* ---------- Desplegar / contraer hallazgos ---------- */
+
+    const btnExpandAll = $("btn-expand-all");
+    const expandAllLabel = $("expand-all-label");
+    const expandAllIcon = $("expand-all-icon");
+
+    function setFindingOpen(li, open) {
+        li.classList.toggle("is-open", open);
+        const btn = li.querySelector(".finding-toggle");
+        if (btn) btn.setAttribute("aria-expanded", String(open));
+    }
+
+    function syncExpandAll() {
+        if (!btnExpandAll) return;
+        const items = $("findings-list").querySelectorAll(".finding.is-expandable");
+        btnExpandAll.hidden = items.length === 0;
+        if (!items.length) return;
+        const allOpen = Array.from(items).every((li) => li.classList.contains("is-open"));
+        btnExpandAll.dataset.state = allOpen ? "open" : "closed";
+        expandAllLabel.textContent = allOpen ? "Contraer todo" : "Desplegar todo";
+        expandAllIcon.innerHTML = `<use href="#${allOpen ? "i-chevrons-up" : "i-chevrons-down"}"/>`;
     }
 
     /* ---------- Render del informe estándar + flujo progresivo ---------- */
@@ -844,6 +901,7 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             list.innerHTML = '<li class="finding"><p class="muted">No se registraron hallazgos adicionales.</p></li>';
         }
+        syncExpandAll();
 
         // Condicional de re-auditoría programada (RF-SCHED-01)
         if (data.verdict === "RECHAZADO" || data.verdict === "CON_OBSERVACIONES") {
@@ -1135,14 +1193,15 @@ document.addEventListener("DOMContentLoaded", () => {
         updateButton();
     });
 
-    examples.forEach((btn) => {
-        btn.addEventListener("click", () => {
-            urlInput.value = btn.dataset.url;
-            scan(btn.dataset.url);
-        });
-    });
-
     document.addEventListener("click", (e) => {
+        const toggleBtn = e.target.closest(".finding-toggle");
+        if (toggleBtn) {
+            const li = toggleBtn.closest(".finding");
+            setFindingOpen(li, !li.classList.contains("is-open"));
+            syncExpandAll();
+            return;
+        }
+
         const copyBtn = e.target.closest(".btn-copy-ticket");
         if (copyBtn) {
             const ticketCard = copyBtn.closest(".ticket");
@@ -1165,6 +1224,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     btnPdf.addEventListener("click", downloadPdf);
+    if (btnExpandAll) {
+        btnExpandAll.addEventListener("click", () => {
+            const open = btnExpandAll.dataset.state !== "open";
+            $("findings-list").querySelectorAll(".finding.is-expandable").forEach((li) => setFindingOpen(li, open));
+            syncExpandAll();
+        });
+    }
     scheduleForm.addEventListener("submit", handleScheduleSubmit);
 
 
