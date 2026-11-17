@@ -103,7 +103,7 @@ async def privacy_policy():
   <p>De acuerdo con la Ley N° 19.628 / 21.719, usted puede solicitar el acceso, rectificación, 
      supresión, oposición, portabilidad y bloqueo de sus datos personales a través de nuestro canal formal:</p>
   <a href="mailto:privacidad@dominio.cl?subject=Solicitud%20Derechos%20ARCOP" class="btn-arco">
-    📧 privacidad@dominio.cl
+    privacidad@dominio.cl
   </a>
 </div>"""
     },
