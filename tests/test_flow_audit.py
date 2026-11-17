@@ -18,6 +18,7 @@ from src.scanner.stage_patterns import (
     PAYMENT_GATEWAY_DOMAINS,
     get_stage_names,
     get_stage_by_name,
+    is_commercial_flow_detected,
 )
 from src.scanner.flow_inspector import FlowInspector, StageCapture
 from src.scanner.flow_rules import FlowRulesEngine, FLOW_LEGAL_DISCLAIMER
@@ -40,6 +41,23 @@ def test_flow_inspector_is_payment_gateway():
     assert FlowInspector._is_payment_gateway("https://app.flow.cl/pago") is True
     assert FlowInspector._is_payment_gateway("https://tienda.cl/carrito") is False
     assert FlowInspector._is_payment_gateway("https://tienda.cl/productos") is False
+
+    # Autodetección comercial: enlace aislado de login/novedades no debe activar flujo de compra
+    assert is_commercial_flow_detected([]) is False
+    assert is_commercial_flow_detected([{"stage_name": "registro"}]) is False
+    assert is_commercial_flow_detected([{"stage_name": "catalogo"}]) is True
+    assert is_commercial_flow_detected([{"stage_name": "carrito"}]) is True
+    assert is_commercial_flow_detected([{"stage_name": "catalogo"}, {"stage_name": "registro"}]) is True
+
+    inspector = FlowInspector()
+    portal_html = '<html><body><a href="/iniciar-sesion">Iniciar sesión</a><a href="/noticias">Novedades</a></body></html>'
+    disc_portal = inspector.discover_candidates_from_html(portal_html, "https://portal.cl/", "portal.cl")
+    assert disc_portal["flow_detected"] is False
+
+    tienda_html = '<html><body><a href="/productos">Productos</a><a href="/carrito">Ver carrito</a></body></html>'
+    disc_tienda = inspector.discover_candidates_from_html(tienda_html, "https://tienda.cl/", "tienda.cl")
+    assert disc_tienda["flow_detected"] is True
+    assert len(disc_tienda["candidates"]) == 2
 
 
 def test_stage_capture_tracks_requests_and_methods():
@@ -217,3 +235,11 @@ async def test_api_flow_audit_lifecycle():
                 assert get_res.status_code == 200
                 job_data = get_res.json()
                 assert job_data["status"] in ("queued", "running", "completed")
+
+                # 3. Contrato con audit_id vinculado desde Fase 1
+                linked_res = await client.post(
+                    "/api/v1/flow-audit",
+                    json={"url": "https://tienda-test.cl", "audit_id": "123e4567-e89b-12d3-a456-426614174000"},
+                )
+                assert linked_res.status_code == 200
+                assert "job_id" in linked_res.json()

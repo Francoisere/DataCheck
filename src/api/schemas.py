@@ -64,12 +64,29 @@ class FramesAudit(BaseModel):
 
 # --- Esquemas para Auditoría de Flujo Multietapa (C-05) ---
 
+class FlowCandidateItem(BaseModel):
+    """Etapa candidata detectada en la portada durante la Fase 1."""
+    stage_name: str = Field(..., description="Nombre de la etapa detectada (catalogo, registro, carrito)")
+    stage_label: str = Field(..., description="Etiqueta legible de la etapa")
+    url: str = Field(..., description="URL candidata sanitizada dentro del dominio")
+
+
+class FlowDiscoveryInfo(BaseModel):
+    """Resultado de autodetección de flujo comercial en portada (Fase 1)."""
+    flow_detected: bool = Field(False, description="True si se detectó un flujo de compra comercial auditable")
+    candidates: List[FlowCandidateItem] = Field(default_factory=list, description="Etapas candidatas descubiertas")
+
+
 class FlowScanRequest(BaseModel):
     """Solicitud de auditoría de flujo de compra/registro."""
     url: str = Field(
         ...,
         examples=["https://tienda-ejemplo.cl"],
         description="URL del sitio web cuyo flujo de compra/registro se auditará"
+    )
+    audit_id: Optional[str] = Field(
+        default=None,
+        description="UUID opcional de la auditoría de 3 pilares para vincular las etapas del flujo"
     )
 
 
@@ -204,6 +221,7 @@ class ScanResponse(BaseModel):
     legal_disclaimer: str = Field(..., description="Aviso legal de descargo de responsabilidad académica")
     pdf_report_url: Optional[str] = Field(None, description="Enlace para descargar el informe oficial en PDF")
     comparison: Optional[AuditDiffResponse] = Field(None, description="Comparativa evolutiva respecto a la auditoría válida inmediatamente anterior")
+    flow_discovery: Optional[FlowDiscoveryInfo] = Field(None, description="Resultado de la autodetección de flujo de compra en portada")
 
 
 class ScheduleCreateRequest(BaseModel):

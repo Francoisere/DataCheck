@@ -28,32 +28,54 @@ _flow_jobs: Dict[str, Dict[str, Any]] = {}
 flow_inspector = FlowInspector()
 
 
-async def _persist_flow_to_db(url: str, evaluated: Dict[str, Any], raw_result: Dict[str, Any]) -> Optional[str]:
-    """Persiste los resultados de la auditoría de flujo en PostgreSQL (Paso 5)."""
+async def _persist_flow_to_db(
+    url: str,
+    evaluated: Dict[str, Any],
+    raw_result: Dict[str, Any],
+    parent_audit_id: Optional[str] = None,
+) -> Optional[str]:
+    """Persiste los resultados de la auditoría de flujo en PostgreSQL (Paso 5).
+
+    Si se recibe un `parent_audit_id` válido existente en BD, asocia las etapas
+    directamente a esa auditoría de 3 pilares sin sobrescribir su score ni veredicto.
+    """
     try:
         async with AsyncSessionLocal() as session:
-            normalized_url, domain = sanitize_url(url)
-            stmt = select(SitioAnalizado).where(SitioAnalizado.url_normalizada == normalized_url)
-            res = await session.execute(stmt)
-            sitio = res.scalar_one_or_none()
+            auditoria: Optional[Auditoria] = None
 
-            if not sitio:
-                sitio = SitioAnalizado(url_normalizada=normalized_url, dominio=domain)
-                session.add(sitio)
+            if parent_audit_id:
+                try:
+                    parent_uuid = uuid.UUID(parent_audit_id)
+                    res_aud = await session.execute(
+                        select(Auditoria).where(Auditoria.id == parent_uuid)
+                    )
+                    auditoria = res_aud.scalar_one_or_none()
+                except ValueError:
+                    auditoria = None
+
+            if not auditoria:
+                normalized_url, domain = sanitize_url(url)
+                stmt = select(SitioAnalizado).where(SitioAnalizado.url_normalizada == normalized_url)
+                res = await session.execute(stmt)
+                sitio = res.scalar_one_or_none()
+
+                if not sitio:
+                    sitio = SitioAnalizado(url_normalizada=normalized_url, dominio=domain)
+                    session.add(sitio)
+                    await session.flush()
+
+                verdict = evaluated.get("flow_verdict", "NO_APLICABLE")
+
+                auditoria = Auditoria(
+                    sitio_id=sitio.id,
+                    page_load_status=1,
+                    verdict=verdict,
+                    score=None,  # Los flujos se rigen por veredictos de etapa (CUMPLE/NO_CUMPLE/NO_VERIFICABLE), no por score numérico
+                    duracion_ms=0,
+                    resumen=evaluated.get("flow_verdict_summary", "")[:500],
+                )
+                session.add(auditoria)
                 await session.flush()
-
-            verdict = evaluated.get("flow_verdict", "NO_APLICABLE")
-
-            auditoria = Auditoria(
-                sitio_id=sitio.id,
-                page_load_status=1,
-                verdict=verdict,
-                score=None,  # Los flujos se rigen por veredictos de etapa (CUMPLE/NO_CUMPLE/NO_VERIFICABLE), no por score numérico
-                duracion_ms=0,
-                resumen=evaluated.get("flow_verdict_summary", "")[:500],
-            )
-            session.add(auditoria)
-            await session.flush()
 
             stages = raw_result.get("stages", [])
             for idx, stage in enumerate(stages):
@@ -94,15 +116,15 @@ async def _persist_flow_to_db(url: str, evaluated: Dict[str, Any], raw_result: D
         return None
 
 
-async def _run_flow_audit(job_id: str, url: str) -> None:
+async def _run_flow_audit(job_id: str, url: str, parent_audit_id: Optional[str] = None) -> None:
     """Ejecuta la auditoría de flujo en background y almacena el resultado."""
     try:
         _flow_jobs[job_id]["status"] = "running"
         raw_result = await flow_inspector.audit_flow(url)
         evaluated = FlowRulesEngine.evaluate(raw_result)
         
-        # Persistencia en BD
-        audit_id = await _persist_flow_to_db(url, evaluated, raw_result)
+        # Persistencia en BD (vinculando a parent_audit_id si existe)
+        audit_id = await _persist_flow_to_db(url, evaluated, raw_result, parent_audit_id=parent_audit_id)
         if audit_id:
             evaluated["audit_id"] = audit_id
 
@@ -145,11 +167,12 @@ async def start_flow_audit(
     _flow_jobs[job_id] = {
         "status": "queued",
         "url": url,
+        "audit_id": request.audit_id,
         "result": None,
         "error": None,
     }
 
-    background_tasks.add_task(_run_flow_audit, job_id, url)
+    background_tasks.add_task(_run_flow_audit, job_id, url, request.audit_id)
 
     return {
         "job_id": job_id,

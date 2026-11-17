@@ -20,7 +20,7 @@ FLOW_STAGES = [
         ],
         "text_patterns": [
             "productos", "tienda", "shop", "catálogo", "catalogo",
-            "ver productos", "comprar", "ofertas", "novedades",
+            "ver productos", "comprar", "ofertas",
         ],
     },
     {
@@ -90,3 +90,18 @@ def get_stage_by_name(name: str) -> Dict:
         if stage["name"] == name:
             return stage
     return {}
+
+
+def is_commercial_flow_detected(discovered_stages: List[Dict[str, str]]) -> bool:
+    """
+    Determina si las etapas descubiertas corresponden a un flujo comercial real.
+    Retorna True si existe al menos una etapa transaccional ('catalogo' o 'carrito')
+    o si se descubrieron >= 2 etapas distintas, evitando falsos positivos por
+    enlaces aislados de '/login' o 'Iniciar sesión'.
+    """
+    if not discovered_stages:
+        return False
+    names = {s.get("stage_name") for s in discovered_stages if s.get("stage_name")}
+    if "catalogo" in names or "carrito" in names:
+        return True
+    return len(names) >= 2

@@ -27,7 +27,7 @@ from bs4 import BeautifulSoup
 
 from src.core.sanitizer import sanitize_url
 from .trackers_db import KNOWN_TRACKER_DOMAINS, is_tracker_cookie
-from .stage_patterns import FLOW_STAGES, PAYMENT_GATEWAY_DOMAINS
+from .stage_patterns import FLOW_STAGES, PAYMENT_GATEWAY_DOMAINS, is_commercial_flow_detected
 from .inspector import block_non_get_route
 
 
@@ -373,6 +373,22 @@ class FlowInspector:
                 })
 
         return discovered
+
+    def discover_candidates_from_html(
+        self,
+        html_content: str,
+        current_url: str,
+        base_domain: str,
+    ) -> Dict[str, Any]:
+        """
+        Evalúa en memoria (0 ms de red extra) si el HTML de portada contiene
+        un flujo comercial auditable (catálogo/carrito o >= 2 etapas).
+        """
+        candidates = self._discover_stages(html_content, current_url, base_domain)
+        return {
+            "flow_detected": is_commercial_flow_detected(candidates),
+            "candidates": candidates,
+        }
 
     def _find_stage_link(
         self,

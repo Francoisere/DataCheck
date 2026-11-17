@@ -16,7 +16,7 @@ from sqlalchemy.orm import selectinload
 from typing import Dict, Any
 
 from src.db.session import get_db_session
-from src.db.models import Auditoria, SitioAnalizado
+from src.db.models import Auditoria, SitioAnalizado, EtapaFlujo
 from src.services.pdf_report_service import PdfReportService
 
 router = APIRouter(prefix="/api/v1/audits", tags=["Reportes de Auditoría"])
@@ -80,7 +80,8 @@ async def download_audit_pdf(
         .options(
             selectinload(Auditoria.sitio),
             selectinload(Auditoria.resultados_pilares),
-            selectinload(Auditoria.evidencias_rastreadores)
+            selectinload(Auditoria.evidencias_rastreadores),
+            selectinload(Auditoria.etapas_flujo).selectinload(EtapaFlujo.evidencias),
         )
         .where(Auditoria.id == val_uuid)
     )
@@ -131,11 +132,49 @@ async def download_audit_pdf(
         "target_url": sitio_url,
         "page_load_status": auditoria.page_load_status,
         "verdict": auditoria.verdict,
-        "score": auditoria.score,
+        "score": auditoria.score if auditoria.score is not None else 0,
         "verdict_summary": auditoria.resumen,
         "pilares": pilares_dict,
         "findings": findings_list
     }
+
+    if auditoria.etapas_flujo:
+        sorted_stages = sorted(auditoria.etapas_flujo, key=lambda e: e.orden)
+        stages_evaluated = []
+        any_no_cumple = False
+        any_cumple = False
+        for et in sorted_stages:
+            doms = [ev.valor for ev in (et.evidencias or []) if ev.tipo == "DOMINIO_NUEVO"]
+            cks = [ev.valor for ev in (et.evidencias or []) if ev.tipo == "COOKIE_NUEVA"]
+            if et.veredicto == "NO_CUMPLE":
+                any_no_cumple = True
+            elif et.veredicto == "CUMPLE":
+                any_cumple = True
+            stages_evaluated.append({
+                "stage_name": et.nombre_etapa,
+                "stage_label": et.etiqueta,
+                "url": et.url,
+                "verdict": et.veredicto,
+                "new_tracker_domains": doms,
+                "new_tracker_cookies": cks,
+            })
+
+        if not auditoria.resultados_pilares:
+            flow_verdict = auditoria.verdict
+            flow_summary = auditoria.resumen
+        elif any_no_cumple:
+            flow_verdict = "NO_CUMPLE"
+            flow_summary = "Se detectaron nuevos rastreadores o cookies en etapas posteriores del flujo sin consentimiento."
+        elif any_cumple:
+            flow_verdict = "CUMPLE"
+            flow_summary = "No se detectaron rastreadores nuevos durante las etapas del flujo evaluadas."
+        else:
+            flow_verdict = "NO_VERIFICABLE"
+            flow_summary = "Las etapas del flujo requirieron interacción activa o pasarela externa no verificable pasivamente."
+
+        audit_payload["stages_evaluated"] = stages_evaluated
+        audit_payload["flow_verdict"] = flow_verdict
+        audit_payload["flow_verdict_summary"] = flow_summary
 
     pdf_buffer = PdfReportService.generate_pdf_report(audit_payload)
     filename = f"DataCheck_Auditoria_{dominio}_{auditoria.id.hex[:8]}.pdf"
