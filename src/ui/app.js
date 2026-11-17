@@ -460,9 +460,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
                 ${pilaresHtml}
                 ${trackersDiffHtml}
-                <div style="margin-top: 14px; display: flex; justify-content: flex-end;">
-                    <button type="button" id="btn-reaudit-now" class="btn-secondary" style="height: 36px; padding: 0 14px; font-size: 13px;">
-                        ${icon("i-search", 14)} Volver a auditar ahora
+                <div class="reaudit-bar">
+                    <div class="reaudit-copy">
+                        <p class="reaudit-title">Verificar correcciones</p>
+                        <p class="reaudit-desc muted small">Ejecuta una nueva revisión de este sitio y compárala con la anterior.</p>
+                    </div>
+                    <button type="button" id="btn-reaudit-now" class="btn-secondary">
+                        ${icon("i-refresh", 16)}<span>Volver a auditar</span>
                     </button>
                 </div>
                 <div id="domain-history-container" style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line);"></div>
@@ -473,13 +477,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 badge.textContent = "1ª Auditoría (Línea Base)";
             }
             content.innerHTML = `
-                <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;">
-                    <div>
-                        <p style="font-size: 14px; font-weight: 600;">Esta es la primera auditoría válida registrada para este dominio (Línea Base).</p>
-                        <p class="muted small" style="margin-top: 4px;">Ejecuta una segunda revisión ahora o programa una re-auditoría para visualizar la comparativa "Antes vs. Después" de puntaje, pilares y rastreadores.</p>
+                <div class="reaudit-bar is-first">
+                    <div class="reaudit-copy">
+                        <p class="reaudit-title">Primera auditoría registrada para este dominio</p>
+                        <p class="reaudit-desc muted small">Ejecuta una segunda revisión o programa una re-auditoría para ver la comparativa de puntaje, pilares y rastreadores.</p>
                     </div>
-                    <button type="button" id="btn-reaudit-now" class="btn-primary" style="height: 40px; padding: 0 18px; font-size: 14px;">
-                        ${icon("i-search", 15)} Re-auditar ahora para comparar
+                    <button type="button" id="btn-reaudit-now" class="btn-primary btn-sm">
+                        ${icon("i-refresh", 16)}<span>Volver a auditar</span>
                     </button>
                 </div>
                 <div id="domain-history-container" style="margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line);"></div>
@@ -488,7 +492,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const btnReaudit = $("btn-reaudit-now");
         if (btnReaudit && data.target_url) {
-            btnReaudit.onclick = () => scan(data.target_url, true);
+            btnReaudit.onclick = () => {
+                btnReaudit.disabled = true;
+                const ic = btnReaudit.querySelector("svg");
+                const lb = btnReaudit.querySelector("span");
+                if (ic) ic.classList.add("spin");
+                if (lb) lb.textContent = "Auditando...";
+                scan(data.target_url, true);
+            };
         }
 
         // Cargar historial evolutivo del dominio desde GET /api/v1/sites/{domain}/history
@@ -1023,9 +1034,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function setScheduleBusy(busy) {
         btnSchedule.disabled = busy;
-        scheduleBtnIcon.innerHTML = `<use href="#${busy ? "i-loader" : "i-mail"}"/>`;
+        scheduleBtnIcon.innerHTML = `<use href="#${busy ? "i-loader" : "i-calendar"}"/>`;
         scheduleBtnIcon.classList.toggle("spin", busy);
-        scheduleBtnLabel.textContent = busy ? "Programando..." : "Calendarizar Re-auditoría";
+        scheduleBtnLabel.textContent = busy ? "Programando..." : "Programar re-auditoría";
     }
 
     async function handleScheduleSubmit(e) {
